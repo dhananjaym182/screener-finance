@@ -1,4 +1,7 @@
-"""Basic screener-finance usage — mirrors the yfinance quickstart style."""
+"""Basic screener-finance usage.
+
+One request per company: everything after t.fetch() is a free view.
+"""
 import screener_finance as sf
 
 # Optional global config:

@@ -1,118 +1,145 @@
 # screener-finance
 
-**yfinance-style API for Indian stock fundamentals** — powered by
-[Screener.in](https://www.screener.in). Written as a standalone server-side
-library (like `yfinance`), installable with `pip`.
+**One-request Python API for Indian stock fundamentals**, built on
+[Screener.in](https://www.screener.in) — a standalone, pip-installable library
+unifying the proven scraping patterns of
+[sahiljani/screener-india](https://github.com/sahiljani/screener-india) and
+[mayur1064/screenercli](https://github.com/mayur1064/screenercli) into one
+clean service.
 
 ```python
 import screener_finance as sf
 
 t = sf.Ticker("RELIANCE")
+t.fetch()               # THE one request — full parsed record, cached
+t.data                  # free view of that record
+t.info                  # free  → market_cap, stock_pe, roe, roce, dividend_yield…
+t.quarterly_results     # free  → DataFrame, 13 quarters
+t.profit_loss           # free  → DataFrame, annual back to Mar 2015 + TTM
+t.balance_sheet / t.cash_flow / t.ratios / t.shareholding   # free
+t.peers                 # lazy  → one small AJAX call, then cached
+t.history("5y")         # lazy  → one chart call per period, then cached
 
-t.info                 # {'name': ..., 'market_cap': ..., 'stock_pe': ..., 'roe': ...}
-t.quarterly_results    # DataFrame — 13 quarters
-t.profit_loss          # DataFrame — annual P&L back to Mar 2015
-t.balance_sheet
-t.cash_flow
-t.ratios
-t.shareholding
-t.peers                # DataFrame — peer comparison
-t.pros / t.cons        # Screener's analysis bullets
-t.history("5y")        # daily close price series (experimental)
-
-sf.download(["SBIN", "TCS", "INFY"])   # batch -> dict of Tickers
-sf.compare(["TCS", "INFY", "WIPRO"])   # side-by-side metrics DataFrame
-sf.search("tata", 5)                   # name/symbol search
+sf.download(["SBIN", "TCS"])          # batch
+sf.batch_download(syms, "out/")       # bulk to disk, resume support
+sf.compare(["TCS", "INFY"])           # side-by-side metrics
+sf.search("tata")
+sf.configure(delay=2.0, proxy="socks5://…")
 ```
+
+**One request per company.** Every statement, ratio, and document view reads
+from the single parsed company page — you never re-scrape screener.in for the
+same data. Only `peers` and `history()` touch separate (tiny) endpoints, and
+each is fetched lazily and cached.
 
 ## Install
 
 ```bash
-pip install -e .                      # from a clone of this repo
-# or once published:
-pip install screener-finance
+git clone https://github.com/dhananjaym182/screener-finance.git
+pip install -e screener-finance
 ```
 
 Python 3.9+. Deps: `requests`, `beautifulsoup4`, `lxml`, `pandas`, `click`.
 
+## Request model (how the API stays cheap)
+
+| Call | Network cost |
+|---|---|
+| `t.fetch()` / `t.data` | **1 request** — the company page; parsed into a record |
+| `t.info`, `t.quarterly_results`, `t.profit_loss`, `t.balance_sheet`, `t.cash_flow`, `t.ratios`, `t.shareholding`, `t.pros`, `t.cons`, `t.about`, `t.documents`, `t.to_json()`, `t.to_csv()` | **0** — views over the fetched record |
+| `t.peers` | 1 small AJAX fragment, lazily, cached in the record |
+| `t.history(period)` | 1 chart-API call per period, cached per Ticker |
+| `t.refresh()` | forces a fresh company-page request |
+
+On top of that, the shared session adds a TTL cache (5 min) and enforced
+pacing, so even `sf.download(["SBIN", "SBIN"])` hits the site once.
+
+## API
+
+### `sf.Ticker(symbol, view="consolidated")`
+
+- `symbol` — NSE/BSE ticker (upper-cased). `view` — `"consolidated"` (default)
+  or `"standalone"`; auto-falls back when one is unavailable.
+
+**Data accessors** — `.info`, `.quarterly_results`, `.profit_loss`,
+`.balance_sheet`, `.cash_flow`, `.ratios`, `.shareholding`, `.peers`,
+`.pros`, `.cons`, `.about`, `.documents`, `.history(period)`, `.data`.
+
+**Exports** — `.to_json(path)`, `.to_csv(dir)` (one CSV per statement +
+ratios + peers + pros/cons + documents).
+
+**Lifecycle** — `.fetch()`, `.refresh()`.
+
+### Module functions
+
+| Function | Purpose |
+|---|---|
+| `sf.download(symbols, view)` | dict of ready Tickers, paced by the shared session; failures land in `sf.last_errors` |
+| `sf.batch_download(symbols, out_dir, fmt="json"\|"csv"\|"both", skip_existing=True)` | bulk to disk with resume; failures → `errors.log` |
+| `sf.compare(symbols)` | key-metrics DataFrame, one row per symbol |
+| `sf.search(query, limit)` | name/symbol search |
+| `sf.configure(delay, jitter, timeout, max_retries, proxy, headers, cache_ttl, user_agent)` | global session tuning |
+
 ## CLI (`sfin`)
 
 ```bash
-sfin info SBIN                        # key metrics JSON
-sfin quarterly RELIANCE               # quarterly results CSV -> stdout
-sfin profit-loss SBIN                 # annual P&L CSV
-sfin all TCS --json tcs.json --csv-dir out/csv
-sfin compare SBIN HDFCBANK ICICIBANK
+sfin info SBIN                       # key metrics (1 request)
+sfin quarterly RELIANCE              # CSV -> stdout (same 1 request)
+sfin profit-loss SBIN
+sfin balance / cashflow / ratios / shareholding <SYMBOL>
+sfin all TCS --json tcs.json --csv-dir out/csv    # everything, 1 request
 sfin history RELIANCE --period 5y --csv rel_px.csv
+sfin compare SBIN HDFCBANK ICICIBANK
 sfin search "hdfc"
 sfin batch --symbols-file nse.txt --out-dir out/bulk --fmt both
+sfin --delay 2.0 --proxy socks5://127.0.0.1:9050 info SBIN
 ```
-
-## API surface (yfinance mapping)
-
-| yfinance | screener-finance |
-|---|---|
-| `yf.Ticker("X")` | `sf.Ticker("X")` (`.upper()`d NSE/BSE symbol) |
-| `t.info` | `t.info` — market_cap, stock_pe, book_value, roe, roce, dividend_yield … |
-| `t.financials` | `t.financials` / `t.profit_loss` (annual P&L) |
-| `t.quarterly_financials` | `t.quarterly_results` (13 quarters) |
-| `t.balance_sheet` | `t.balance_sheet` |
-| `t.cashflow` | `t.cash_flow` |
-| `t.history(period)` | `t.history(period)` — daily close (screener chart API) |
-| `yf.download([...])` | `sf.download([...])` / `sf.batch_download(list, out_dir)` |
-| — | `t.shareholding`, `t.peers`, `t.pros`, `t.cons`, `t.documents` |
-| — | `t.to_json(path)`, `t.to_csv(dir)` |
-| — | `sf.search(q)`, `sf.compare([...])` |
-| — | `sf.configure(delay=…, proxy=…, user_agent=…)` |
-
-`view=` — Screener serves **consolidated** (default) and **standalone**
-views: `sf.Ticker("SBIN", "standalone")`.
 
 ## Anti-blocking (built in)
 
 - Full browser-like header set + shared `requests.Session`
 - Enforced min-interval throttling (default **1.5s**) + random jitter
-- TTL response cache (5 min) — repeated lookups don't re-hit the site
+- TTL response cache (5 min) — repeated lookups never re-hit the site
 - HTTP 429 → honors `Retry-After`, then exponential backoff (3 tries)
 - Optional proxy: `sf.configure(proxy="socks5://…")`
-- Batch mode with resume: skips symbols already downloaded; failures → `errors.log`
+- Batch mode with resume: skips symbols already downloaded
 
-**Timing:** measured ~1.0s/req latency → ~2s/stock including pacing.
-All ~2,700 NSE active stocks ≈ **1.5–2 h**; NSE+BSE ≈ 3–4 h. Keep delays ≥1s
-and run bulk jobs overnight (IST) — that's all screener.in needs.
+**Timing:** measured ~1.0s/req → ~2s/stock including pacing. All ~2,700 NSE
+active stocks ≈ **1.5–2 h**; NSE+BSE ≈ 3–4 h. Keep delays ≥1s; run bulk jobs
+overnight (IST).
 
-## Data quality
+## Why screener.in
 
-Screener.in is the verified ground truth used by Tapetide's MCP API
-(117/117 annual P&L values identical in a 3-stock cross-check — see the
-[tapetide-scraper repo](https://github.com/dhananjaym182/tapetide-scraper)).
+In a three-way verification (see
+[tapetide-scraper](https://github.com/dhananjaym182/tapetide-scraper)),
+Screener.in's statements matched Tapetide's paid MCP API **117/117 annual
+values** — it is the ground-truth source those services repackage.
 
-## Files layout
+## Project layout
 
 ```
 screener-finance/
 ├── pyproject.toml              # pip-installable, `sfin` entry point
 ├── src/screener_finance/
 │   ├── __init__.py             # public API
-│   ├── ticker.py               # Ticker class (yfinance-style)
-│   ├── session.py              # HTTP session + throttle + cache + retries
-│   ├── parse.py                # HTML -> dicts
-│   ├── dataframe.py            # dict -> pandas
+│   ├── ticker.py               # Ticker: one request -> many views
+│   ├── session.py              # shared session: throttle, cache, retries, proxy
+│   ├── parse.py                # HTML -> records
+│   ├── dataframe.py            # records -> pandas
 │   ├── download.py             # download() / batch_download()
 │   ├── search.py               # search() / compare()
 │   ├── cli.py                  # sfin command line
 │   └── exceptions.py
-├── tests/test_offline.py       # offline parser tests (CI)
+├── tests/test_offline.py       # offline tests (CI, no network)
 ├── examples/basic_usage.py
 └── .github/workflows/ci.yml
 ```
 
 ## Responsible use
 
-Screener.in is a free service — respect it: keep the default pacing, don't
-remove the throttle, cache what you can. This library is for personal
-research/education; don't redistribute their data commercially without
-permission. Not investment advice.
+Screener.in is a free service — keep the default pacing, don't strip the
+throttle, cache what you can. For personal research/education; don't
+redistribute their data commercially without permission. Not investment advice.
 
 ## License
 

@@ -157,7 +157,7 @@ class Session:
         raise ScreenerError(f"GET {url} failed after {self.max_retries} attempts: {last_exc}")
 
 
-# module-level singleton, yfinance-style global config
+# module-level singleton with global config
 _session = Session()
 
 

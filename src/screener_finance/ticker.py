@@ -1,10 +1,20 @@
-"""yfinance-style Ticker class for Screener.in company data."""
+"""Ticker: one company record from screener.in, served many ways.
+
+Request model
+-------------
+- `fetch()` / `data`  -> the ONE company-page request; everything else reads
+  from it. Calling accessors in any order costs nothing extra.
+- `peers`             -> one small AJAX fragment (only when you touch it), cached.
+- `history(period)`   -> one chart-API call per (company, period), cached.
+
+Everything else is a zero-cost view over the fetched record.
+"""
 from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # pandas is required at use time, imported lazily
+if TYPE_CHECKING:
     import pandas as pd
 
 from .exceptions import ScreenerError, ViewUnavailableError
@@ -13,37 +23,60 @@ from .session import BASE_URL, get_session
 
 VALID_VIEWS = ("consolidated", "standalone")
 
+RATIO_ALIASES = {
+    "Market Cap": "market_cap",
+    "Current Price": "current_price",
+    "High / Low": "high_low",
+    "Stock P/E": "stock_pe",
+    "Book Value": "book_value",
+    "Dividend Yield": "dividend_yield",
+    "ROCE": "roce",
+    "ROE": "roe",
+    "Face Value": "face_value",
+}
+
 
 class Ticker:
-    """One company from Screener.in.
+    """One company from screener.in.
 
-        t = sf.Ticker("RELIANCE")            # consolidated (default)
-        t = sf.Ticker("RELIANCE", "standalone")
+    One-request model:
+        t = sf.Ticker("RELIANCE")
+        t.fetch()             # the single company-page request
+        t.data                # the parsed record (free after fetch)
+        t.info                # free
+        t.quarterly_results   # free (DataFrame view)
+        t.peers               # lazy: one AJAX call, then cached
+        t.history("5y")       # lazy: one chart call per period, then cached
 
-        t.info                                # dict of key metrics
-        t.quarterly_results                   # DataFrame (index=row label)
-        t.profit_loss / balance_sheet / cash_flow / ratios / shareholding
-        t.pros / t.cons                       # lists
-        t.peers                               # DataFrame
-        t.documents                           # list of {"title", "url"}
-        t.to_json("sb.json") / t.to_csv("dir/")
+    Exports (free):
+        t.to_json("sb.json") / t.to_csv("csv_dir/")
     """
 
     def __init__(self, symbol: str, view: str = "consolidated"):
-        symbol = symbol.strip().upper()
+        symbol = str(symbol).strip().upper()
+        if not symbol:
+            raise ValueError("symbol must be a non-empty NSE/BSE ticker, e.g. 'RELIANCE'")
         if view not in VALID_VIEWS:
             raise ValueError(f"view must be one of {VALID_VIEWS}")
         self.symbol = symbol
         self.view = view
         self._record: dict[str, Any] | None = None
-        self._fetched_view: str | None = None
+        self._company_id: str | None = None
+        self._history_cache: dict[str, "pd.DataFrame"] = {}
 
-    # ---- internals --------------------------------------------------------
+    # ------------------------------------------------------------------
+    # The ONE request
+    # ------------------------------------------------------------------
 
-    def _fetch(self, force: bool = False) -> dict[str, Any]:
-        """Fetch + parse the page once; auto-fallback consolidated->standalone."""
+    def fetch(self, force: bool = False) -> dict[str, Any]:
+        """Fetch + parse the company page (once per Ticker unless force=True).
+
+        This is the only company-page network call. Every property/method that
+        follows reads from the parsed record it returns.
+        """
         if self._record is not None and not force:
             return self._record
+
         sess = get_session()
         path = (f"/company/{self.symbol}/"
                 if self.view == "standalone"
@@ -51,40 +84,43 @@ class Ticker:
         soup = sess.get_soup(path)
         final_view = "consolidated" if "/consolidated" in path else "standalone"
         url = f"{BASE_URL}{path}"
-        try:
-            record = parse_company(self.symbol, final_view, soup, url)
-        except Exception:
-            raise
-        # empty page (no tables & no ratios) -> try the other view once
-        if not record["top_ratios"] and not any(record["sections"][k]["rows"]
-                                                for k in record["sections"]):
+
+        record = parse_company(self.symbol, final_view, soup, url)
+
+        # Blank page -> the requested view may not exist; try the other once.
+        if not record["top_ratios"] and not any(
+                record["sections"][k]["rows"] for k in record["sections"]):
             other = "standalone" if self.view == "consolidated" else "consolidated"
             p2 = (f"/company/{self.symbol}/"
                   if other == "standalone" else f"/company/{self.symbol}/consolidated/")
             soup2 = sess.get_soup(p2, use_cache=False)
             record = parse_company(self.symbol, other, soup2, f"{BASE_URL}{p2}")
-            if not record["top_ratios"] and not any(record["sections"][k]["rows"]
-                                                    for k in record["sections"]):
+            if not record["top_ratios"] and not any(
+                    record["sections"][k]["rows"] for k in record["sections"]):
                 raise ViewUnavailableError(self.symbol)
             self.view = other
+
         self._record = record
-        self._fetched_view = record["view"]
         return record
 
-    def _section(self, key: str) -> dict:
-        return self._fetch()["sections"][key]
+    @property
+    def data(self) -> dict[str, Any]:
+        """The parsed company record (fetches once if needed)."""
+        return self.fetch()
 
-    # ---- info ---------------------------------------------------------
+    def refresh(self) -> dict[str, Any]:
+        """Force a re-fetch of the company page (bypasses cache)."""
+        self._history_cache.clear()
+        return self.fetch(force=True)
+
+    # ------------------------------------------------------------------
+    # Zero-cost views over the fetched record
+    # ------------------------------------------------------------------
 
     @property
     def info(self) -> dict[str, Any]:
-        """Key metrics dict, yfinance-style. Numeric values where possible.
-
-        Includes: name, symbol, view, market_cap, current_price, stock_pe,
-        book_value, dividend_yield, roce, roe, face_value, high_52w, low_52w,
-        plus about/pros/cons and scraped_at/source_url.
-        """
-        rec = self._fetch()
+        """Key metrics dict (from the fetched record — no extra request)."""
+        rec = self.fetch()
         out: dict[str, Any] = {
             "symbol": rec["symbol"],
             "name": rec["name"],
@@ -93,36 +129,12 @@ class Ticker:
             "source_url": rec["source_url"],
             "scraped_at": rec["scraped_at"],
         }
-        mapping = {
-            "Market Cap": "market_cap",
-            "Current Price": "current_price",
-            "High / Low": "high_low",
-            "Stock P/E": "stock_pe",
-            "Book Value": "book_value",
-            "Dividend Yield": "dividend_yield",
-            "ROCE": "roce",
-            "ROE": "roe",
-            "Face Value": "face_value",
-        }
         for k, v in rec["top_ratios"].items():
-            key = mapping.get(k)
-            if key is None:
-                key = k.lower().replace(" ", "_").replace("/", "_")
-            out[key] = v
-        # split "High / Low" into two keys when present
-        hl = rec["top_ratios"].get("High / Low")
-        if hl is not None:
-            # value parse keeps only the first number; reparse raw text
-            ul = None
-            from bs4 import BeautifulSoup  # local import; cheap
-            # re-derive from raw page text is unnecessary — screener renders
-            # "High / Low" as one combined value; keep both halves if possible:
-            # we stored the numeric first half; also expose raw combined.
-            out["high_52w"] = hl  # best-effort (first number)
-            out["low_52w"] = None
+            out[RATIO_ALIASES.get(k, k.lower().replace(" ", "_").replace("/", "_"))] = v
         return out
 
-    # ---- statement DataFrames -------------------------------------------
+    def _section(self, key: str) -> dict:
+        return self.fetch()["sections"][key]
 
     @property
     def quarterly_results(self) -> "pd.DataFrame":
@@ -154,52 +166,31 @@ class Ticker:
         from .dataframe import table_to_df
         return table_to_df(self._section("shareholding"))
 
-    # yfinance-friendly aliases -------------------------------------------
-    # (yfinance uses .financials/.balance_sheet/.cashflow for annual statements)
-    @property
-    def financials(self) -> "pd.DataFrame":
-        """Alias for profit_loss (yfinance-style naming)."""
-        return self.profit_loss
-
-    @property
-    def balance_sheet_annual(self) -> "pd.DataFrame":
-        return self.balance_sheet
-
-    @property
-    def cashflow(self) -> "pd.DataFrame":
-        return self.cash_flow
-
-    @property
-    def quarterly_financials(self) -> "pd.DataFrame":
-        return self.quarterly_results
-
-    # ---- misc data --------------------------------------------------------
-
     @property
     def pros(self) -> list[str]:
-        return self._fetch()["pros_cons"]["pros"]
+        return self.fetch()["pros_cons"]["pros"]
 
     @property
     def cons(self) -> list[str]:
-        return self._fetch()["pros_cons"]["cons"]
+        return self.fetch()["pros_cons"]["cons"]
 
     @property
     def about(self) -> str:
-        return self._fetch()["about"]
+        return self.fetch()["about"]
 
     @property
     def documents(self) -> list[dict]:
-        return self._fetch()["documents"]
+        return self.fetch()["documents"]
+
+    # ------------------------------------------------------------------
+    # Lazy secondary endpoints (one small call each, then cached)
+    # ------------------------------------------------------------------
 
     @property
     def peers(self) -> "pd.DataFrame":
-        """Peer comparison as DataFrame (index=peer name).
-
-        Peers live behind a small AJAX endpoint, fetched on demand with the
-        company's warehouse id (with Referer/X-Requested-With headers).
-        """
+        """Peer comparison DataFrame. One AJAX fragment per company, cached."""
         import pandas as pd
-        rec = self._fetch()
+        rec = self.fetch()
         p = rec["peers"]
         if not p["peers"]:
             wid = rec.get("warehouse_id")
@@ -223,43 +214,32 @@ class Ticker:
             rec["peers"] = p
         if not p["peers"]:
             return pd.DataFrame()
-        rows = {}
-        for peer in p["peers"]:
-            rows[peer["name"]] = peer["values"]
+        rows = {peer["name"]: peer["values"] for peer in p["peers"]}
         return pd.DataFrame.from_dict(rows, orient="index")
 
-    @property
-    def raw(self) -> dict[str, Any]:
-        """The full parsed record (everything above, as plain dict)."""
-        return self._fetch()
+    def history(self, period: str = "1y") -> "pd.DataFrame":
+        """Daily price series from the chart API (one call per period, cached).
 
-    # ---- experimental price history ---------------------------------------
-
-    def history(self, period: str = "1y", interval: str = "1d") -> "pd.DataFrame":
-        """Daily price history (close) from screener.in's chart API.
-
-            t.history("1y")          # 1 year of daily closes
-            t.history("5y")          # 5 years
-
-        Returns DataFrame indexed by date with a `close` column (plus any
-        extra series screener includes, e.g. `volume` when available).
+        Columns: close, dma50, dma200, volume, delivery_pct (where available).
+        period: 1m, 3m, 6m, 1y, 2y, 5y, max
         """
         import json as _json
         import pandas as pd
+
+        if period in self._history_cache:
+            return self._history_cache[period]
+
         days = {"1m": 30, "3m": 91, "6m": 182, "1y": 365,
                 "2y": 730, "5y": 1825, "max": 4000}.get(period)
         if days is None:
             raise ValueError("period must be one of 1m, 3m, 6m, 1y, 2y, 5y, max")
-        if interval != "1d":
-            raise ValueError("only interval='1d' is supported by screener.in")
 
         sess = get_session()
-        # company_id lives on the already-cached company page
-        record = self._fetch()
-        company_id = getattr(self, "_company_id", None)
+        rec = self.fetch()
+        company_id = self._company_id
         if company_id is None:
             from bs4 import BeautifulSoup
-            soup = sess.get_soup(record["source_url"].replace(BASE_URL, ""))
+            soup = sess.get_soup(rec["source_url"].replace(BASE_URL, ""))
             el = soup.select_one("[data-company-id]")
             if el is None:
                 raise ScreenerError(f"could not find company id for {self.symbol}")
@@ -268,17 +248,13 @@ class Ticker:
 
         soup_json = sess.get_soup(
             f"/api/company/{company_id}/chart/?period={days}&interval=1d")
-        text = soup_json.get_text()
         try:
-            data = _json.loads(text)
+            data = _json.loads(soup_json.get_text())
         except Exception as exc:
             raise ScreenerError(
                 f"chart endpoint returned non-JSON for {self.symbol}") from exc
 
         datasets = data.get("datasets", []) if isinstance(data, dict) else []
-        if not datasets:
-            raise ScreenerError(f"empty chart payload for {self.symbol}")
-
         series: dict[str, dict[str, float]] = {}
         deliveries: dict[str, float] = {}
         for ds in datasets:
@@ -290,7 +266,6 @@ class Ticker:
                 date, val = v[0], num(v[1])
                 if val is not None:
                     series[metric][date] = val
-                # volume rows carry a third element: {"delivery": %}
                 if len(v) >= 3 and isinstance(v[2], dict):
                     dlv = v[2].get("delivery")
                     if dlv is not None:
@@ -313,20 +288,24 @@ class Ticker:
             df = df.rename(columns={"price": "close"})
         if deliveries:
             df["delivery_pct"] = pd.Series(deliveries, dtype="float64")
+
+        self._history_cache[period] = df
         return df
 
-    # ---- exports ------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Exports (free — operate on the fetched record)
+    # ------------------------------------------------------------------
 
     def to_json(self, path: str) -> str:
         import json
         import os
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fp:
-            json.dump(self.raw, fp, indent=1, ensure_ascii=False)
+            json.dump(self.data, fp, indent=1, ensure_ascii=False)
         return path
 
     def to_csv(self, directory: str) -> list[str]:
-        """Write one CSV per statement + top_ratios + peers + pros/cons."""
+        """One CSV per statement + top_ratios + peers + pros/cons + documents."""
         import csv
         import os
         import re as _re
@@ -334,7 +313,7 @@ class Ticker:
         safe = _re.sub(r"[^A-Za-z0-9_-]+", "_", self.symbol)
         paths: list[str] = []
 
-        def _write(name: str, headers: list[str], rows: list[list]):
+        def _write(name: str, headers: list[str], rows: list[list]) -> None:
             path = os.path.join(directory, f"{safe}_{name}.csv")
             with open(path, "w", newline="", encoding="utf-8") as fp:
                 w = csv.writer(fp)
@@ -349,31 +328,29 @@ class Ticker:
                 _write(key, ["Item"] + sec["headers"],
                        [[r["label"]] + r["values"] for r in sec["rows"]])
 
-        tr = self._fetch()["top_ratios"]
+        tr = self.fetch()["top_ratios"]
         if tr:
             _write("top_ratios", ["Ratio", "Value"], [[k, v] for k, v in tr.items()])
 
-        peers = self._fetch()["peers"]
+        peers = self.fetch()["peers"]
         if peers["peers"]:
             cols = peers["columns"]
             _write("peers", ["Name"] + cols,
                    [[p["name"]] + [p["values"].get(c) for c in cols] for p in peers["peers"]])
 
-        pc = self._fetch()["pros_cons"]
+        pc = self.fetch()["pros_cons"]
         if pc["pros"] or pc["cons"]:
             _write("pros_cons", ["type", "text"],
                    [["pro", x] for x in pc["pros"]] + [["con", x] for x in pc["cons"]])
 
-        docs = self._fetch()["documents"]
+        docs = self.fetch()["documents"]
         if docs:
             _write("documents", ["title", "url"], [[d["title"], d["url"]] for d in docs])
         return paths
 
-    # ---- repr ---------------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
-        try:
-            rec = self._fetch()
-            return (f"<Ticker {self.symbol} ({rec['view']}) {rec['name']!r}>")
-        except Exception as exc:
-            return f"<Ticker {self.symbol} (unfetched: {exc})>"
+        if self._record is not None:
+            return f"<Ticker {self.symbol} ({self._record['view']}) {self._record['name']!r}>"
+        return f"<Ticker {self.symbol} (not fetched — call .fetch() or any accessor)>"

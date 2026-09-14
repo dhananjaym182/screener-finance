@@ -1,8 +1,8 @@
 """sfin — command line for screener-finance.
 
     sfin info SBIN
-    sfin quarterly SBIN --csv out/
-    sfin all SBIN --json sbin.json --csv-dir out/csv
+    sfin quarterly SBIN
+    sfin all SBIN --json sbin.json --csv-dir out/csv      # one request, all views
     sfin batch --symbols-file nse.txt --out-dir out/bulk --fmt both
     sfin compare SBIN TCS INFY
     sfin history SBIN --period 5y --csv sbin_px.csv
@@ -26,7 +26,7 @@ import screener_finance as sf
 @click.option("--delay", type=float, default=None, help="Min seconds between requests (default 1.5)")
 @click.option("--proxy", default=None, help="Proxy URL (http:// or socks5://)")
 def cli(delay, proxy):
-    """screener-finance CLI — yfinance-style data from Screener.in."""
+    """screener-finance CLI — Indian stock fundamentals from Screener.in."""
     kwargs = {}
     if delay is not None:
         kwargs["delay"] = delay
@@ -36,54 +36,64 @@ def cli(delay, proxy):
         sf.configure(**kwargs)
 
 
+def _ticker(symbol: str, view: str) -> sf.Ticker:
+    return sf.Ticker(symbol, view)
+
+
 @cli.command()
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def info(symbol, view):
-    """Print key metrics for SYMBOL."""
-    t = sf.Ticker(symbol, view)
-    click.echo(json.dumps(t.info, indent=1, ensure_ascii=False))
+    """Key metrics for SYMBOL (one request)."""
+    click.echo(json.dumps(_ticker(symbol, view).info, indent=1, ensure_ascii=False))
 
 
 @cli.command()
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def quarterly(symbol, view):
-    """Print quarterly results as CSV to stdout."""
-    df = sf.Ticker(symbol, view).quarterly_results
-    click.echo(df.to_csv())
+    """Quarterly results as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).quarterly_results.to_csv())
 
 
 @cli.command(name="profit-loss")
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def profit_loss(symbol, view):
-    """Print annual P&L as CSV to stdout."""
-    click.echo(sf.Ticker(symbol, view).profit_loss.to_csv())
+    """Annual P&L as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).profit_loss.to_csv())
 
 
 @cli.command()
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def balance(symbol, view):
-    """Print balance sheet as CSV to stdout."""
-    click.echo(sf.Ticker(symbol, view).balance_sheet.to_csv())
+    """Balance sheet as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).balance_sheet.to_csv())
 
 
 @cli.command()
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def cashflow(symbol, view):
-    """Print cash flow as CSV to stdout."""
-    click.echo(sf.Ticker(symbol, view).cash_flow.to_csv())
+    """Cash flow as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).cash_flow.to_csv())
+
+
+@cli.command()
+@click.argument("symbol")
+@click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
+def ratios(symbol, view):
+    """Key ratios as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).ratios.to_csv())
 
 
 @cli.command()
 @click.argument("symbol")
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def shareholding(symbol, view):
-    """Print shareholding pattern as CSV to stdout."""
-    click.echo(sf.Ticker(symbol, view).shareholding.to_csv())
+    """Shareholding pattern as CSV (same single request)."""
+    click.echo(_ticker(symbol, view).shareholding.to_csv())
 
 
 @cli.command()
@@ -92,8 +102,8 @@ def shareholding(symbol, view):
               type=click.Choice(["1m", "3m", "6m", "1y", "2y", "5y", "max"]))
 @click.option("--csv", "csv_path", type=click.Path(), default=None)
 def history(symbol, period, csv_path):
-    """Print daily price history (CSV) for SYMBOL."""
-    df = sf.Ticker(symbol).history(period)
+    """Daily price history (close, DMA50/200, volume, delivery %)."""
+    df = _ticker(symbol).history(period)
     if csv_path:
         df.to_csv(csv_path)
         click.echo(f"saved -> {csv_path}")
@@ -107,8 +117,8 @@ def history(symbol, period, csv_path):
 @click.option("--csv-dir", type=click.Path(), default=None)
 @click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
 def all(symbol, json_path, csv_dir, view):
-    """Fetch everything for SYMBOL; optional JSON + CSV export."""
-    t = sf.Ticker(symbol, view)
+    """Everything for SYMBOL from ONE request; optional JSON + CSV export."""
+    t = _ticker(symbol, view)
     if json_path:
         t.to_json(json_path)
         click.echo(f"JSON -> {json_path}")
@@ -116,7 +126,7 @@ def all(symbol, json_path, csv_dir, view):
         paths = t.to_csv(csv_dir)
         click.echo(f"CSVs -> {len(paths)} files in {csv_dir}")
     if not json_path and not csv_dir:
-        click.echo(json.dumps(t.raw, indent=1, ensure_ascii=False))
+        click.echo(json.dumps(t.data, indent=1, ensure_ascii=False))
 
 
 @cli.command()

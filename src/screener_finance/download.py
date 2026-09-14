@@ -1,4 +1,4 @@
-"""Batch helpers: sf.download(...) like yfinance.download, plus bulk export."""
+"""Batch helpers: sf.download(...) and bulk-to-disk sf.batch_download(...)."""
 from __future__ import annotations
 
 import json
