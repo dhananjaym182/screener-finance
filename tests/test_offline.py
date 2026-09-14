@@ -157,6 +157,116 @@ def test_exports():
         assert json.load(open(jp))["symbol"] == "SBIN"
 
 
+# ---- one-request guarantee -------------------------------------------------
+
+def test_one_request_per_ticker():
+    """All same-page accessors together cost exactly ONE company-page request."""
+    import screener_finance.session as sess_mod
+    from screener_finance.ticker import Ticker
+
+    calls = {"page": 0, "text": 0}
+
+    class FakeSession:
+        def get_soup(self, path, use_cache=True):
+            calls["page"] += 1
+            return BeautifulSoup(HTML, "html.parser")
+
+        def get_text(self, path, use_cache=True):
+            calls["text"] += 1
+            return "{}"
+
+    orig = sess_mod._session
+    sess_mod._session = FakeSession()
+    try:
+        t = Ticker("SBIN")
+        t.fetch()
+        _ = t.info
+        _ = t.quarterly_results, t.profit_loss, t.balance_sheet
+        _ = t.cash_flow, t.ratios, t.shareholding
+        _ = t.pros, t.cons, t.about, t.documents
+        # repeat accessors — still no extra calls
+        _ = t.info, t.quarterly_results
+        assert calls["page"] == 1, f"expected 1 page request, got {calls['page']}"
+        assert calls["text"] == 0, calls["text"]
+    finally:
+        sess_mod._session = orig
+
+
+def test_session_cache_dedupes_repeats():
+    """Session TTL cache: same URL twice = one network call (across Tickers too)."""
+    import screener_finance.session as sess_mod
+
+    class FakeResp:
+        status_code = 200
+        text = HTML
+
+    s = sess_mod.Session()
+    calls = {"n": 0}
+
+    def fake_request(path):
+        calls["n"] += 1
+        return FakeResp()
+
+    s._request = fake_request
+    s.get_soup("/company/SBIN/consolidated/")
+    s.get_soup("/company/SBIN/consolidated/")  # served from TTL cache
+    assert calls["n"] == 1, calls["n"]
+
+
+def test_peers_fetched_once_and_cached():
+    """Peers: one AJAX call, then cached in the record."""
+    import screener_finance.session as sess_mod
+    from screener_finance.ticker import Ticker
+
+    class FakeSession:
+        def __init__(self):
+            self.page_calls = 0
+            self.peer_calls = 0
+            self.timeout = 5
+
+        def _ensure(self):
+            import types
+            s = types.SimpleNamespace()
+            s.get = lambda url, headers=None, timeout=None: self._peer_resp()
+            return s
+
+        def _peer_resp(self):
+            self.peer_calls += 1
+            import types
+            r = types.SimpleNamespace()
+            r.status_code = 200
+            r.text = PEERS_FRAGMENT
+            r.raise_for_status = lambda: None
+            return r
+
+        def get_soup(self, path, use_cache=True):
+            self.page_calls += 1
+            return BeautifulSoup(HTML, "html.parser")
+
+        def get_text(self, path, use_cache=True):
+            return "{}"
+
+        def throttle_wait(self):
+            pass
+
+    fake = FakeSession()
+    fake.throttle = types.SimpleNamespace(wait=lambda: None)
+    orig = sess_mod._session
+    sess_mod._session = fake
+    try:
+        t = Ticker("SBIN")
+        _ = t.peers
+        _ = t.peers
+        _ = t.peers
+        assert fake.page_calls == 1
+        assert fake.peer_calls == 1, f"peers AJAX called {fake.peer_calls}x"
+    finally:
+        sess_mod._session = orig
+
+
+import types  # noqa: E402  (used by peers test)
+
+
 if __name__ == "__main__":
     test_num()
     test_top_ratios()
@@ -167,4 +277,7 @@ if __name__ == "__main__":
     test_peers_fragment()
     test_table_to_df()
     test_exports()
+    test_one_request_per_ticker()
+    test_session_cache_dedupes_repeats()
+    test_peers_fetched_once_and_cached()
     print("ALL OFFLINE TESTS PASSED")
