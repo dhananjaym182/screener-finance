@@ -1,4 +1,5 @@
 """Exceptions for screener_finance."""
+from __future__ import annotations
 
 
 class ScreenerError(RuntimeError):
