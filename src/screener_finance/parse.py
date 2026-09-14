@@ -44,7 +44,16 @@ def parse_top_ratios(soup: BeautifulSoup) -> dict[str, float | None]:
             continue
         name = cell_text(name_el).rstrip(":").strip()
         value_el = li.select_one("span.nowrap") or li.select_one("span.number")
-        ratios[name] = num(cell_text(value_el)) if value_el else None
+        text = cell_text(value_el) if value_el else ""
+        # "High / Low" renders as one combined cell: "₹ 1,612 / 1,250"
+        if name == "High / Low" and "/" in text:
+            parts = [num(p) for p in text.split("/")]
+            ratios[name] = parts[0] if parts else None
+            if len(parts) == 2:
+                ratios["high_52w"] = parts[0]
+                ratios["low_52w"] = parts[1]
+            continue
+        ratios[name] = num(text) if value_el else None
     return ratios
 
 
