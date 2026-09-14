@@ -50,6 +50,7 @@ class Ticker:
 
     Exports (free):
         t.to_json("sb.json") / t.to_csv("csv_dir/")
+        t.canonical() / t.to_canonical_json("sb_canonical.json")
     """
 
     def __init__(self, symbol: str, view: str = "consolidated"):
@@ -181,6 +182,63 @@ class Ticker:
     @property
     def documents(self) -> list[dict]:
         return self.fetch()["documents"]
+
+    # ------------------------------------------------------------------
+    # Canonical (normalized) views — still zero-cost over the one fetch
+    # ------------------------------------------------------------------
+
+    def canonical(self, section_filter: list[str] | None = None) -> dict[str, Any]:
+        """Canonical feed-style dataset from the SAME single request.
+
+        Removes every scrape artifact: "Mar 2015" period strings become
+        ISO period_end + fiscal_year + period_type (FY/Q/TTM), row labels
+        become canonical item keys ("Sales" -> "sales"), combined High/Low
+        becomes separate high_52w/low_52w, and site plumbing
+        (source_url, scraped_at) moves to a separate meta block.
+
+        Structure::
+
+            {
+              "meta":       {symbol, name, view, source_url, generated_at},
+              "indicators": {key: {value, unit}},
+              "statements": [{symbol, view, section, item, period_end,
+                              fiscal_year, period_type, value}, ...],
+            }
+        """
+        from .normalize import canonical as _canonical
+        return _canonical(self.fetch(), section_filter=section_filter)
+
+    def to_canonical_json(self, path: str) -> str:
+        """Write the canonical dataset to path (no extra request)."""
+        import json
+        import os
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fp:
+            json.dump(self.canonical(), fp, indent=1, ensure_ascii=False)
+        return path
+
+    def canonical_tidy_csv(self) -> str:
+        """Statements as one flat tidy CSV string (item x period x value)."""
+        import csv
+        import io
+        from .normalize import TIDY_COLUMNS, statements_tidy_rows
+        canon = self.canonical()
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(TIDY_COLUMNS)
+        w.writerows(statements_tidy_rows(canon))
+        return buf.getvalue()
+
+    def canonical_indicators_csv(self) -> str:
+        """Indicators as a tidy CSV string (key, value, unit)."""
+        import csv
+        import io
+        from .normalize import indicator_rows
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["key", "value", "unit"])
+        w.writerows(indicator_rows(self.canonical()))
+        return buf.getvalue()
 
     # ------------------------------------------------------------------
     # Lazy secondary endpoints (one small call each, then cached)

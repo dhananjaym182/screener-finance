@@ -24,12 +24,13 @@ Design rule: exactly ONE scrape per company page. Every accessor after
 """
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .ticker import Ticker
 from .download import download, batch_download
 from .search import search, compare
 from .session import configure
+from .normalize import canonical, parse_period
 from . import universe
 from .exceptions import (
     CompanyNotFoundError,
@@ -45,6 +46,8 @@ __all__ = [
     "search",
     "compare",
     "configure",
+    "canonical",
+    "parse_period",
     "universe",
     "ScreenerError",
     "CompanyNotFoundError",

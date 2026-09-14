@@ -17,6 +17,8 @@ t.info                  # free  → market_cap, stock_pe, roe, roce, dividend_yi
 t.quarterly_results     # free  → DataFrame, 13 quarters
 t.profit_loss           # free  → DataFrame, annual back to Mar 2015 + TTM
 t.balance_sheet / t.cash_flow / t.ratios / t.shareholding   # free
+t.canonical()           # free  → feed-style dataset, zero scrape artifacts
+t.to_canonical_json("sb.json")   # free → canonical dataset on disk
 t.peers                 # lazy  → one small AJAX call, then cached
 t.history("5y")         # lazy  → one chart call per period, then cached
 
@@ -53,6 +55,36 @@ Python 3.9+. Deps: `requests`, `beautifulsoup4`, `lxml`, `pandas`, `click`.
 
 On top of that, the shared session adds a TTL cache (5 min) and enforced
 pacing, so even `sf.download(["SBIN", "SBIN"])` hits the site once.
+
+## Canonical dataset — reads like a curated feed, not a scrape
+
+`t.canonical()` (same single request, zero extra cost) normalizes everything
+at the boundary so the output carries **no trace of the site it came from**:
+
+| Scrape artifact | Canonical form |
+|---|---|
+| `"Mar 2015"` column headers | ISO `period_end` + `fiscal_year` + `period_type` (FY / Q / TTM) — India Apr–Mar fiscal years handled (`Jun 2023` → `FY2024`) |
+| `"Sales +"`, `"Net Profit"` row labels | canonical item keys: `sales`, `net_profit`, `cash_from_operations`, `promoters_pct`… |
+| units embedded in strings (`₹`, `%`, `Cr.`) | numeric values + explicit `unit` (`INR`, `INR_Cr`, `%`, `x`, `days`) |
+| combined `High / Low` cell | separate `high_52w` / `low_52w` |
+| site plumbing (`source_url`, `scraped_at`, `view`) | isolated in a separate `meta` block |
+
+```python
+canon = t.canonical()
+canon["meta"]        # symbol, name, view, source_url, generated_at
+canon["indicators"]  # {key: {value, unit}} — market_cap, roe, high_52w…
+canon["statements"]  # tidy rows: {symbol, section, item, period_end,
+                     #             fiscal_year, period_type, value}
+```
+
+```bash
+sfin canonical SBIN --json sbin_canonical.json --csv-dir out/canon
+# → sbin_canonical.json + canonical_statements.csv (long/tidy) + canonical_indicators.csv
+```
+
+The tidy `canonical_statements.csv` is analysis-ready: one row per
+item × period, ISO dates, typed values — joinable across symbols into a
+single master panel without any cleanup.
 
 ## API
 

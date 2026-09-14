@@ -19,6 +19,12 @@ from screener_finance.parse import (
     parse_warehouse_id,
 )
 from screener_finance.dataframe import table_to_df
+from screener_finance.normalize import (
+    canonical,
+    map_item_label,
+    map_ratio_label,
+    parse_period,
+)
 
 HTML = """
 <html><body>
@@ -267,6 +273,124 @@ def test_peers_fetched_once_and_cached():
 import types  # noqa: E402  (used by peers test)
 
 
+# ---- canonical normalization -------------------------------------------------
+
+def test_parse_period():
+    # Fiscal year ends Mar: Mar 2015 == FY2015, ends 2015-03-31
+    p = parse_period("Mar 2015")
+    assert p == {"period_end": "2015-03-31", "fiscal_year": "FY2015",
+                 "period_type": None}, p
+    # Non-Mar quarters roll into the next fiscal year: Jun 2023 -> FY2024
+    p = parse_period("Jun 2023")
+    assert p == {"period_end": "2023-06-30", "fiscal_year": "FY2024",
+                 "period_type": None}, p
+    # TTM column
+    p = parse_period("TTM")
+    assert p is not None and p["period_type"] == "TTM", p
+    # two-digit years
+    p = parse_period("Mar 99")
+    assert p["period_end"] == "2099-03-31", p
+    # non-periods
+    assert parse_period("Revenue") is None
+    assert parse_period("") is None
+
+
+def test_map_labels():
+    assert map_item_label("Sales") == "sales"
+    assert map_item_label("Sales +") == "sales"
+    assert map_item_label("Net Profit +") == "net_profit"
+    assert map_item_label("Profit after tax") == "net_profit"
+    assert map_item_label("EPS (Rs)") == "eps"
+    assert map_item_label("Borrowings +") == "borrowings"
+    assert map_item_label("Cash from Operating Activity") == "cash_from_operations"
+    assert map_item_label("Promoters") == "promoters_pct"
+    assert map_item_label("FII/FPI") in ("fii_pct", "fii_fpi")
+    assert map_ratio_label("Market Cap") == "market_cap"
+    assert map_ratio_label("Stock P/E") == "stock_pe"
+    assert map_ratio_label("High / Low") == "high_low"
+
+
+def test_canonical_structure():
+    soup = BeautifulSoup(HTML, "html.parser")
+    rec = parse_company("SBIN", "consolidated", soup, "https://x/")
+    canon = canonical(rec)
+
+    assert set(canon.keys()) == {"meta", "indicators", "statements"}
+    assert canon["meta"]["symbol"] == "SBIN"
+    # site plumbing lives only in meta
+    assert "source_url" in canon["meta"]
+    assert "scraped_at" not in json.dumps(canon["statements"])
+
+    # indicators: canonical keys with units, combined High/Low split
+    keys = set(canon["indicators"].keys())
+    assert "market_cap" in keys and "stock_pe" in keys
+    assert "high_52w" in keys and "low_52w" in keys
+    assert "high_low" not in keys
+    assert canon["indicators"]["market_cap"] == {"value": 920107, "unit": "INR_Cr"}
+    assert canon["indicators"]["stock_pe"] == {"value": 10.9, "unit": "x"}
+    assert canon["indicators"]["roe"] == {"value": 15.4, "unit": "%"}
+
+    # statements: tidy rows with ISO periods and canonical items
+    s = canon["statements"]
+    assert s, "expected statement rows"
+    row = next(r for r in s if r["section"] == "quarterly_results"
+               and r["item"] == "sales")
+    assert row["period_end"] in ("2023-06-30", "2023-09-30", "2023-12-31")
+    assert row["period_type"] == "Q"
+    assert row["value"] in (101460, 107391, 112868)
+    fy = next(r for r in s if r["section"] == "profit_loss"
+              and r["item"] == "sales")
+    assert fy["period_end"] in ("2015-03-31", "2016-03-31")
+    assert fy["period_type"] == "FY"
+    assert fy["fiscal_year"] in ("FY2015", "FY2016")
+
+    # no raw labels or period strings leak through
+    blob = json.dumps(canon["statements"])
+    assert "Revenue" not in blob and "Net Profit" not in blob
+    assert "Mar 2015" not in blob and "Jun 2023" not in blob
+    # footnote artifact "+" never appears
+    assert "label" not in blob
+
+
+def test_canonical_ticker_method_and_exports():
+    import screener_finance.session as sess_mod
+    from screener_finance.ticker import Ticker
+
+    class FakeSession:
+        def get_soup(self, path, use_cache=True):
+            return BeautifulSoup(HTML, "html.parser")
+
+        def get_text(self, path, use_cache=True):
+            return "{}"
+
+    orig = sess_mod._session
+    sess_mod._session = FakeSession()
+    try:
+        t = Ticker("SBIN")
+        t.fetch()                       # the one request
+        canon = t.canonical()           # zero extra requests
+        assert canon["meta"]["symbol"] == "SBIN"
+        assert canon["indicators"]["high_52w"]["value"] == 1235
+        assert canon["indicators"]["low_52w"]["value"] == 810
+
+        with tempfile.TemporaryDirectory() as tmp:
+            jp = t.to_canonical_json(os.path.join(tmp, "c.json"))
+            loaded = json.load(open(jp))
+            assert loaded["meta"]["symbol"] == "SBIN"
+
+        tidy = t.canonical_tidy_csv()
+        assert tidy.splitlines()[0].startswith("symbol,view,section,item")
+        assert "2023-09-30" in tidy
+
+        ind = t.canonical_indicators_csv()
+        assert ind.splitlines()[0] == "key,value,unit"
+        hl_lines = [ln for ln in ind.splitlines() if ln.startswith("high_52w,")]
+        assert hl_lines and hl_lines[0].endswith(",INR"), hl_lines
+        assert "low_52w," in ind
+    finally:
+        sess_mod._session = orig
+
+
 if __name__ == "__main__":
     test_num()
     test_top_ratios()
@@ -280,4 +404,8 @@ if __name__ == "__main__":
     test_one_request_per_ticker()
     test_session_cache_dedupes_repeats()
     test_peers_fetched_once_and_cached()
+    test_parse_period()
+    test_map_labels()
+    test_canonical_structure()
+    test_canonical_ticker_method_and_exports()
     print("ALL OFFLINE TESTS PASSED")

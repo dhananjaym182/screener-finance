@@ -130,6 +130,54 @@ def all(symbol, json_path, csv_dir, view):
 
 
 @cli.command()
+@click.argument("symbol")
+@click.option("--view", type=click.Choice(["consolidated", "standalone"]), default="consolidated")
+@click.option("--json", "json_path", type=click.Path(), default=None, help="Write canonical JSON here")
+@click.option("--csv-dir", type=click.Path(), default=None, help="Write canonical_statements.csv + canonical_indicators.csv here")
+def canonical(symbol, view, json_path, csv_dir):
+    """Canonical (normalized) dataset for SYMBOL — same single request.
+
+    Emits a feed-style structure: ISO period_end dates, fiscal_year,
+    period_type (FY/Q/TTM), canonical item keys, explicit units. No
+    scrape artifacts.
+    """
+    import os
+
+    t = _ticker(symbol, view)
+    canon = t.canonical()
+
+    if json_path:
+        os.makedirs(os.path.dirname(os.path.abspath(json_path)) or ".", exist_ok=True)
+        with open(json_path, "w", encoding="utf-8") as fp:
+            json.dump(canon, fp, indent=1, ensure_ascii=False)
+        click.echo(f"canonical JSON -> {json_path}")
+
+    if csv_dir:
+        import csv
+        os.makedirs(csv_dir, exist_ok=True)
+        from screener_finance.normalize import (
+            TIDY_COLUMNS, indicator_rows, statements_tidy_rows,
+        )
+
+        s_path = os.path.join(csv_dir, "canonical_statements.csv")
+        with open(s_path, "w", newline="", encoding="utf-8") as fp:
+            w = csv.writer(fp)
+            w.writerow(TIDY_COLUMNS)
+            w.writerows(statements_tidy_rows(canon))
+        click.echo(f"tidy statements CSV -> {s_path}")
+
+        i_path = os.path.join(csv_dir, "canonical_indicators.csv")
+        with open(i_path, "w", newline="", encoding="utf-8") as fp:
+            w = csv.writer(fp)
+            w.writerow(["key", "value", "unit"])
+            w.writerows(indicator_rows(canon))
+        click.echo(f"indicators CSV -> {i_path}")
+
+    if not json_path and not csv_dir:
+        click.echo(json.dumps(canon, indent=1, ensure_ascii=False))
+
+
+@cli.command()
 @click.argument("symbols", nargs=-1)
 @click.option("--out-dir", default="out/screener_finance", show_default=True)
 @click.option("--fmt", type=click.Choice(["json", "csv", "both"]), default="both", show_default=True)
