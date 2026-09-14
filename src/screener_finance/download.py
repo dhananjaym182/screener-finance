@@ -59,7 +59,7 @@ def batch_download(symbols: Iterable[str], out_dir: str,
             continue
         try:
             t = Ticker(sym)
-            record = t.raw
+            record = t.fetch()  # the single company-page request
             with open(json_path, "w", encoding="utf-8") as fp:
                 json.dump(record, fp, indent=1, ensure_ascii=False)
             if fmt in ("csv", "both"):

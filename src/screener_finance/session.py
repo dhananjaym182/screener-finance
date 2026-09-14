@@ -120,12 +120,9 @@ class Session:
 
     # ---- core fetch -------------------------------------------------------
 
-    def get_soup(self, path: str, use_cache: bool = True) -> BeautifulSoup:
+    def _request(self, path: str) -> "requests.Response":
+        """GET with throttle, retries and 429 handling. Returns a 200 response."""
         url = path if path.startswith("http") else f"{BASE_URL}{path}"
-        if use_cache:
-            hit = self.cache.get(url)
-            if hit is not None:
-                return hit
         s = self._ensure()
         last_exc: Exception | None = None
         for attempt in range(self.max_retries):
@@ -141,9 +138,7 @@ class Session:
                 continue
 
             if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "lxml")
-                self.cache.put(url, soup)
-                return soup
+                return resp
             if resp.status_code == 404:
                 raise CompanyNotFoundError(url)
             if resp.status_code == 429:
@@ -155,6 +150,29 @@ class Session:
                 raise RateLimitError(int(ra) if (ra or "").isdigit() else None)
             resp.raise_for_status()
         raise ScreenerError(f"GET {url} failed after {self.max_retries} attempts: {last_exc}")
+
+    def get_soup(self, path: str, use_cache: bool = True) -> BeautifulSoup:
+        url = path if path.startswith("http") else f"{BASE_URL}{path}"
+        if use_cache:
+            hit = self.cache.get(url)
+            if hit is not None:
+                return hit
+        resp = self._request(path)
+        soup = BeautifulSoup(resp.text, "lxml")
+        self.cache.put(url, soup)
+        return soup
+
+    def get_text(self, path: str, use_cache: bool = True) -> str:
+        """Raw text for CSV/JSON endpoints (same throttle/retry/cache stack)."""
+        url = path if path.startswith("http") else f"{BASE_URL}{path}"
+        key = "text:" + url
+        if use_cache:
+            hit = self.cache.get(key)
+            if hit is not None:
+                return hit
+        text = self._request(path).text
+        self.cache.put(key, text)
+        return text
 
 
 # module-level singleton with global config

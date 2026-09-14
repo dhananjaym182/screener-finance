@@ -130,7 +130,7 @@ def all(symbol, json_path, csv_dir, view):
 
 
 @cli.command()
-@click.argument("symbols", nargs=-1, required=True)
+@click.argument("symbols", nargs=-1)
 @click.option("--out-dir", default="out/screener_finance", show_default=True)
 @click.option("--fmt", type=click.Choice(["json", "csv", "both"]), default="both", show_default=True)
 @click.option("--symbols-file", type=click.Path(exists=True), default=None)
@@ -160,6 +160,33 @@ def search(query, limit):
     """Search companies by name/symbol."""
     for r in sf.search(query, limit):
         click.echo(f"{r['symbol']:<15} {r['name']}")
+
+
+@cli.command()
+@click.option("--screen", default=None,
+              help="Use a public screener.in screen (id or URL) instead of the NSE list")
+@click.option("--out", "out_path", default="nse_symbols.txt", show_default=True)
+def symbols(screen, out_path):
+    """Build a symbol list of all active NSE stocks (for sfin batch).\n
+    Default source: NSE's official listed-equity CSV (one request, no login).\n    With --screen: parse any public screener.in screen instead.
+    """
+    from screener_finance import universe
+
+    if screen:
+        def prog(page, n):
+            click.echo(f"  page {page}: {n} symbols so far")
+
+        syms = universe.from_screen(screen, progress=prog)
+        note = f"screen {screen}"
+    else:
+        def prog(msg):
+            click.echo(f"  {msg}")
+
+        syms = universe.nse_active(progress=prog)
+        note = "NSE listed equities (EQ/BE/BZ)"
+
+    universe.save(syms, out_path, note=note)
+    click.echo(f"{len(syms)} symbols -> {out_path}")
 
 
 def main() -> int:

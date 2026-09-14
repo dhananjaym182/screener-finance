@@ -246,10 +246,10 @@ class Ticker:
             company_id = el["data-company-id"]
             self._company_id = company_id
 
-        soup_json = sess.get_soup(
+        chart_text = sess.get_text(
             f"/api/company/{company_id}/chart/?period={days}&interval=1d")
         try:
-            data = _json.loads(soup_json.get_text())
+            data = _json.loads(chart_text)
         except Exception as exc:
             raise ScreenerError(
                 f"chart endpoint returned non-JSON for {self.symbol}") from exc

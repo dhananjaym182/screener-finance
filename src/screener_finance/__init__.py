@@ -30,6 +30,7 @@ from .ticker import Ticker
 from .download import download, batch_download
 from .search import search, compare
 from .session import configure
+from . import universe
 from .exceptions import (
     CompanyNotFoundError,
     RateLimitError,
@@ -44,6 +45,7 @@ __all__ = [
     "search",
     "compare",
     "configure",
+    "universe",
     "ScreenerError",
     "CompanyNotFoundError",
     "RateLimitError",
