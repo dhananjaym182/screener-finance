@@ -259,6 +259,15 @@ def canonical(
         periods = _section_periods(section.get("headers") or [])
         if not periods:
             continue
+        # TTM columns have no fixed period of their own; anchor them to the
+        # section's latest quarter-end so every row stays joinable.
+        q_ends = [p["period_end"] for p in periods
+                  if p and not p["period_type"] and p["period_end"]]
+        ttm_end = max(q_ends) if q_ends else ""
+        ttm_fy = None
+        if ttm_end:
+            y, m = int(ttm_end[:4]), int(ttm_end[5:7])
+            ttm_fy = f"FY{y if m == 3 else y + 1}"
         for row in section.get("rows") or []:
             item = map_item_label(row["label"])
             values = row.get("values") or []
@@ -267,17 +276,23 @@ def canonical(
                     continue
                 if period["period_type"]:
                     ptype = "TTM"
+                    period_end = period["period_end"] or ttm_end
+                    fiscal_year = period["fiscal_year"] or ttm_fy
                 elif period["period_end"][5:7] == "03":
                     ptype = "FY"
+                    period_end = period["period_end"]
+                    fiscal_year = period["fiscal_year"]
                 else:
                     ptype = "Q"
+                    period_end = period["period_end"]
+                    fiscal_year = period["fiscal_year"]
                 statements.append({
                     "symbol": record["symbol"],
                     "view": record.get("view"),
                     "section": key,
                     "item": item,
-                    "period_end": period["period_end"],
-                    "fiscal_year": period["fiscal_year"],
+                    "period_end": period_end,
+                    "fiscal_year": fiscal_year,
                     "period_type": ptype,
                     "value": values[i],
                 })

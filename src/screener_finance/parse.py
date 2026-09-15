@@ -75,6 +75,10 @@ def parse_financial_table(section_el) -> tuple[list[str], list[dict]]:
         if not cells:
             continue
         label = _strip_footnote(cell_text(cells[0]))
+        # Skip link-only rows screener appends to every table ("Raw PDF"):
+        # they carry no numeric data and would leak as all-None artifacts.
+        if label.strip().lower() in ("raw pdf", "raw pdf +", "raw pdf*"):
+            continue
         raw = [cell_text(td) for td in cells[1:]]
         vals = [num(x) for x in raw]
         if len(vals) < len(headers):

@@ -58,6 +58,15 @@ HTML = """
   </table>
 </section>
 <section id="balance-sheet"></section>
+<section id="cash-flow">
+  <table class="data-table">
+    <thead><tr><th></th><th>Mar 2015</th><th>Mar 2016</th></tr></thead>
+    <tbody>
+      <tr><td class="text">Cash from Operating Activity +</td><td class="number">31,646</td><td class="number">37,545</td></tr>
+      <tr><td class="text">Raw PDF</td><td class="">x</td><td class="">x</td></tr>
+    </tbody>
+  </table>
+</section>
 <div class="pros"><p class="title">Pros</p><ul><li>Healthy dividend payout</li></ul></div>
 <div class="cons"><p class="title">Cons</p><ul><li>Low interest coverage ratio</li></ul></div>
 <ul class="list-links">
@@ -111,6 +120,16 @@ def test_sections():
     assert qr["rows"][0]["values"] == [101460, 107391, 112868]
     assert secs["profit_loss"]["headers"] == ["Mar 2015", "Mar 2016"]
     assert secs["balance_sheet"]["rows"] == []
+
+
+def test_raw_pdf_row_stripped():
+    """Screener's link-only 'Raw PDF' row must never leak into parsed data."""
+    soup = BeautifulSoup(HTML, "html.parser")
+    secs = parse_all_sections(soup)
+    labels = [r["label"] for r in secs["cash_flow"]["rows"]]
+    assert labels == ["Cash from Operating Activity"], labels
+    assert all(r["label"].lower() != "raw pdf" for sec in secs.values()
+               for r in sec["rows"])
 
 
 def test_pros_cons():
@@ -393,6 +412,8 @@ def test_canonical_ticker_method_and_exports():
 
 if __name__ == "__main__":
     test_num()
+    test_sections()
+    test_raw_pdf_row_stripped()
     test_top_ratios()
     test_sections()
     test_pros_cons()
