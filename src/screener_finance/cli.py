@@ -25,13 +25,23 @@ import screener_finance as sf
 @click.version_option(sf.__version__, prog_name="sfin")
 @click.option("--delay", type=float, default=None, help="Min seconds between requests (default 1.5)")
 @click.option("--proxy", default=None, help="Proxy URL (http:// or socks5://)")
-def cli(delay, proxy):
+@click.option("--log-file", type=click.Path(), default=None,
+              help="Log every request (status/elapsed/User-Agent) + blocks to this file")
+@click.option("--log-level", default=None,
+              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
+              help="Log level for --log-file (default INFO: 200s hidden, blocks shown)")
+def cli(delay, proxy, log_file, log_level):
     """screener-finance CLI — Indian stock fundamentals from Screener.in."""
+    import logging
     kwargs = {}
     if delay is not None:
         kwargs["delay"] = delay
     if proxy is not None:
         kwargs["proxy"] = proxy
+    if log_file is not None:
+        kwargs["log_file"] = log_file
+    if log_level is not None:
+        kwargs["log_level"] = getattr(logging, log_level)
     if kwargs:
         sf.configure(**kwargs)
 
