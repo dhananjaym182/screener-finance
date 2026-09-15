@@ -42,14 +42,19 @@ def download(symbols: Iterable[str], view: str = "consolidated") -> dict[str, Ti
 
 def batch_download(symbols: Iterable[str], out_dir: str,
                    fmt: str = "both", csv_subdir: str = "csv",
-                   skip_existing: bool = True, verbose: bool = True) -> dict:
+                   skip_existing: bool = True, verbose: bool = True,
+                   keys: dict[str, str] | None = None) -> dict:
     """Bulk download to disk with resume support.
 
         sf.batch_download(symbol_list, "out/screener_finance", fmt="both")
 
+    keys: optional {symbol: screener_url_key} map — BSE-only companies are
+    addressed by their numeric BSE code (from sf.universe.all_unique()).
+
     Writes <out_dir>/<SYMBOL>.json (+ <out_dir>/csv/<SYMBOL>_*.csv when
     fmt includes csv). Returns a summary dict.
     """
+    keys = keys or {}
     from .session import get_session
     sess = get_session()
 
@@ -68,7 +73,7 @@ def batch_download(symbols: Iterable[str], out_dir: str,
             skipped += 1
             continue
         try:
-            t = Ticker(sym)
+            t = Ticker(sym, key=keys.get(sym))
             record = t.fetch()  # the single company-page request
             with open(json_path, "w", encoding="utf-8") as fp:
                 json.dump(record, fp, indent=1, ensure_ascii=False)

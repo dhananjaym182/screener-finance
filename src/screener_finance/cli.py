@@ -192,15 +192,24 @@ def canonical(symbol, view, json_path, csv_dir):
 @click.option("--out-dir", default="out/screener_finance", show_default=True)
 @click.option("--fmt", type=click.Choice(["json", "csv", "both"]), default="both", show_default=True)
 @click.option("--symbols-file", type=click.Path(exists=True), default=None)
-def batch(symbols, out_dir, fmt, symbols_file):
+@click.option("--keys-file", type=click.Path(exists=True), default=None,
+              help="TSV symbol<TAB>screener_key for BSE-only stocks (numeric codes)")
+def batch(symbols, out_dir, fmt, symbols_file, keys_file):
     """Batch download with resume; SYMBOLS... or --symbols-file (one per line)."""
     syms = list(symbols)
     if symbols_file:
         with open(symbols_file, encoding="utf-8") as fp:
             syms += [ln.strip() for ln in fp if ln.strip() and not ln.startswith("#")]
+    keys = {}
+    if keys_file:
+        with open(keys_file, encoding="utf-8") as fp:
+            for ln in fp:
+                parts = ln.rstrip("\n").split("\t")
+                if len(parts) >= 2 and parts[0].strip():
+                    keys[parts[0].strip().upper()] = parts[1].strip()
     if not syms:
         raise click.UsageError("no symbols given")
-    summary = sf.batch_download(syms, out_dir, fmt=fmt)
+    summary = sf.batch_download(syms, out_dir, fmt=fmt, keys=keys or None)
     click.echo(json.dumps(summary, indent=1))
 
 

@@ -53,7 +53,11 @@ class Ticker:
         t.canonical() / t.to_canonical_json("sb_canonical.json")
     """
 
-    def __init__(self, symbol: str, view: str = "consolidated"):
+    def __init__(self, symbol: str, view: str = "consolidated",
+                 key: str | None = None):
+        """symbol: your label (NSE/BSE ticker). key: optional screener URL
+        key override — BSE-only companies are addressed by their numeric
+        BSE code (e.g. Ticker("AADIIND", key="530027"))."""
         symbol = str(symbol).strip().upper()
         if not symbol:
             raise ValueError("symbol must be a non-empty NSE/BSE ticker, e.g. 'RELIANCE'")
@@ -61,6 +65,7 @@ class Ticker:
             raise ValueError(f"view must be one of {VALID_VIEWS}")
         self.symbol = symbol
         self.view = view
+        self.key = str(key).strip() if key else None
         self._record: dict[str, Any] | None = None
         self._company_id: str | None = None
         self._history_cache: dict[str, "pd.DataFrame"] = {}
@@ -79,9 +84,10 @@ class Ticker:
             return self._record
 
         sess = get_session()
-        path = (f"/company/{self.symbol}/"
+        slug = self.key or self.symbol
+        path = (f"/company/{slug}/"
                 if self.view == "standalone"
-                else f"/company/{self.symbol}/consolidated/")
+                else f"/company/{slug}/consolidated/")
         soup = sess.get_soup(path)
         final_view = "consolidated" if "/consolidated" in path else "standalone"
         url = f"{BASE_URL}{path}"
@@ -92,8 +98,8 @@ class Ticker:
         if not record["top_ratios"] and not any(
                 record["sections"][k]["rows"] for k in record["sections"]):
             other = "standalone" if self.view == "consolidated" else "consolidated"
-            p2 = (f"/company/{self.symbol}/"
-                  if other == "standalone" else f"/company/{self.symbol}/consolidated/")
+            p2 = (f"/company/{slug}/"
+                  if other == "standalone" else f"/company/{slug}/consolidated/")
             soup2 = sess.get_soup(p2, use_cache=False)
             record = parse_company(self.symbol, other, soup2, f"{BASE_URL}{p2}")
             if not record["top_ratios"] and not any(

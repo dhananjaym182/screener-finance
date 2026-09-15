@@ -1,22 +1,23 @@
-"""Stock symbol universe builder — all active NSE stocks, keyless.
+"""Stock symbol universe builder — all active NSE + BSE stocks, keyless.
 
-Primary source: NSE's public listed-equity CSV (EQUITY_L.csv) — the same
-official archive file used to build Nifty 500 constituent lists. One request,
-no login, includes SYMBOL + company name + ISIN + series filter (EQ/BE/BZ are
-the tradable equity series).
+Sources (both official, one request each):
+- NSE:  archives.nseindia.com EQUITY_L.csv (series EQ/BE/BZ)
+- BSE:  daily Equity Bhavcopy CSV (equity series only; debt/ETF/rights excluded)
 
-Fallback: any screener.in public screen URL (id or URL) — results are parsed
-from the server-rendered table, page by page.
+`all_unique()` merges both, deduplicating dual-listed companies by ISIN
+(the NSE symbol wins); BSE-only companies are returned with their numeric
+BSE code as the screener URL key (Ticker("AADIIND", key="530027")).
 
 Usage:
     from screener_finance import universe
-    syms = universe.nse_active()               # ~2,570 symbols, ONE request
-    syms = universe.from_screen("178")         # any public screener screen
-    universe.save(syms, "nse_symbols.txt")
+    syms = universe.nse_active()               # ~2,570 NSE symbols
+    syms, keys = universe.all_unique()         # ~4,500 unique companies
+    universe.save(syms, "all_symbols.txt")
 """
 from __future__ import annotations
 
 import csv
+import datetime
 import io
 import re
 import time
@@ -29,7 +30,12 @@ NSE_EQUITY_URLS = (
     "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv",
 )
 TRADABLE_SERIES = {"EQ", "BE", "BZ"}
+BSE_BHAVCOPY = ("https://www.bseindia.com/download/BhavCopy/Equity/"
+                "BhavCopy_BSE_CM_0_0_0_{date:%Y%m%d}_F_0000.CSV")
+# BSE series that are common equity. Debt = F/IF, ETFs = E, rights = R.
+BSE_EQUITY_SERIES = {"A", "B", "X", "XT", "T", "M", "MT", "Z", "G", "P"}
 
+_SYM_OK = re.compile(r"^[A-Z0-9\-]+$")
 _SYM_HREF = re.compile(r"href=\"/company/([^/\"]+)/\"")
 _TOTAL_RE = re.compile(r"([\d,]+)\s+results?")
 
@@ -37,6 +43,32 @@ _TOTAL_RE = re.compile(r"([\d,]+)\s+results?")
 # ---------------------------------------------------------------------------
 # Primary: NSE listed-equity CSV (one request)
 # ---------------------------------------------------------------------------
+
+def _nse_rows() -> list[dict]:
+    """Raw NSE CSV rows: [{symbol, isin, name}] (tradable series only)."""
+    sess = get_session()
+    last_exc: Exception | None = None
+    for url in NSE_EQUITY_URLS:
+        try:
+            text = sess.get_text(url, use_cache=False)
+            out: list[dict] = []
+            for row in csv.DictReader(io.StringIO(text)):
+                sym = (row.get("SYMBOL") or "").strip().upper()
+                ser = (row.get(" SERIES") or row.get("SERIES") or "").strip().upper()
+                if sym and ser in TRADABLE_SERIES and _SYM_OK.match(sym):
+                    out.append({
+                        "symbol": sym,
+                        "isin": (row.get(" ISIN NUMBER")
+                                 or row.get("ISIN NUMBER") or "").strip(),
+                        "name": ((row.get("NAME OF COMPANY")
+                                  or row.get(" NAME OF COMPANY") or "").strip()),
+                    })
+            if out:
+                return out
+        except Exception as exc:  # try the next mirror
+            last_exc = exc
+    raise RuntimeError(f"could not download NSE equity list: {last_exc}")
+
 
 def nse_active(progress: Callable[[str], None] | None = None,
                series: set[str] | None = None) -> list[str]:
@@ -46,45 +78,82 @@ def nse_active(progress: Callable[[str], None] | None = None,
     alphabetically (deduplicated).
     """
     series = series or TRADABLE_SERIES
-    sess = get_session()
-    last_exc: Exception | None = None
-    for url in NSE_EQUITY_URLS:
-        try:
-            text = sess.get_text(url, use_cache=False)
-            rows = csv.DictReader(io.StringIO(text))
-            syms: list[str] = []
-            names: dict[str, str] = {}
-            for row in rows:
-                sym = (row.get("SYMBOL") or "").strip().upper()
-                ser = (row.get(" SERIES") or row.get("SERIES") or "").strip().upper()
-                if sym and ser in series:
-                    syms.append(sym)
-                    names[sym] = (row.get("NAME OF COMPANY") or "").strip()
-            if progress:
-                progress(f"{len(syms)} symbols from {url.split('/')[2]}")
-            return sorted(set(syms))
-        except Exception as exc:  # try the next mirror
-            last_exc = exc
-    raise RuntimeError(f"could not download NSE equity list: {last_exc}")
+    rows = [r for r in _nse_rows()]
+    syms = sorted({r["symbol"] for r in rows})
+    if progress:
+        progress(f"{len(syms)} NSE symbols")
+    return syms
 
 
 def nse_active_with_names() -> dict[str, str]:
     """{symbol: company name} for all active NSE equities (one request)."""
+    return {r["symbol"]: r["name"] for r in _nse_rows()}
+
+
+# ---------------------------------------------------------------------------
+# BSE: daily equity bhavcopy (equity series only)
+# ---------------------------------------------------------------------------
+
+def _parse_bhavcopy(text: str) -> list[dict]:
+    """Bhavcopy CSV -> [{symbol, code, isin}] (equity series only)."""
+    out: list[dict] = []
+    for row in csv.DictReader(io.StringIO(text)):
+        sym = (row.get("TckrSymb") or "").strip().upper()
+        isin = (row.get("ISIN") or "").strip()
+        ser = (row.get("SctySrs") or "").strip().upper()
+        if (len(isin) == 12 and isin.startswith("INE")
+                and ser in BSE_EQUITY_SERIES
+                and sym and _SYM_OK.match(sym)
+                and not sym.endswith(("-RE", "-XA"))):
+            out.append({"symbol": sym,
+                        "code": (row.get("FinInstrmId") or "").strip(),
+                        "isin": isin})
+    return out
+
+
+def bse_rows(max_lookback: int = 6) -> list[dict]:
+    """BSE equity rows from the most recent daily bhavcopy (one request)."""
     sess = get_session()
     last_exc: Exception | None = None
-    for url in NSE_EQUITY_URLS:
+    day = datetime.date.today()
+    for back in range(max_lookback):
+        d = day - datetime.timedelta(days=back)
+        url = BSE_BHAVCOPY.format(date=d)
         try:
             text = sess.get_text(url, use_cache=False)
-            out: dict[str, str] = {}
-            for row in csv.DictReader(io.StringIO(text)):
-                sym = (row.get("SYMBOL") or "").strip().upper()
-                ser = (row.get(" SERIES") or row.get("SERIES") or "").strip().upper()
-                if sym and ser in TRADABLE_SERIES:
-                    out[sym] = (row.get("NAME OF COMPANY") or "").strip()
-            return out
+            if len(text) > 100_000:  # real bhavcopy, not an error page
+                return _parse_bhavcopy(text)
         except Exception as exc:
             last_exc = exc
-    raise RuntimeError(f"could not download NSE equity list: {last_exc}")
+    raise RuntimeError(f"could not download BSE bhavcopy: {last_exc}")
+
+
+def bse_active() -> tuple[list[str], dict[str, str]]:
+    """(BSE symbols, {symbol: numeric BSE code}) — one request."""
+    rows = bse_rows()
+    codes = {r["symbol"]: r["code"] for r in rows}
+    return sorted(codes), codes
+
+
+def all_unique() -> tuple[list[str], dict[str, str]]:
+    """Full unique NSE + BSE universe, deduplicated by ISIN.
+
+    Dual-listed companies appear once under their NSE symbol; BSE-only
+    companies keep their BSE ticker and get a screener URL key (numeric
+    BSE code). Returns (symbols, keys) — keys only contains BSE-only
+    entries; pass it to batch_download(keys=...) or Ticker(key=...).
+    """
+    nse = _nse_rows()
+    nse_isins = {r["isin"] for r in nse if r["isin"]}
+    uniq = {r["symbol"] for r in nse}
+    keys: dict[str, str] = {}
+    for r in bse_rows():
+        if r["isin"] in nse_isins or r["symbol"] in uniq:
+            continue  # dual-listed (same ISIN) or ticker collision
+        uniq.add(r["symbol"])
+        if r["code"]:
+            keys[r["symbol"]] = r["code"]
+    return sorted(uniq), keys
 
 
 # ---------------------------------------------------------------------------
