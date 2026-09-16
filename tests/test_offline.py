@@ -340,6 +340,44 @@ def test_canonical_structure():
     assert "source_url" in canon["meta"]
     assert "scraped_at" not in json.dumps(canon["statements"])
 
+
+def test_canonical_ttm_only_section_uses_record_anchor():
+    """A section with ONLY a TTM column (rare: newly-listed companies)
+    must still get a joinable period_end, anchored to the record-wide
+    latest quarter-end — never an empty one."""
+    rec = {
+        "symbol": "TEST", "name": "Test Ltd", "view": "consolidated",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "quarterly_results": {
+                "headers": ["Sep 2025", "Dec 2025", "Mar 2026"],
+                "rows": [{"label": "Sales", "values": [10.0, 11.0, 12.0]}],
+            },
+            "profit_loss": {"headers": ["TTM"],
+                            "rows": [{"label": "Sales", "values": [46.0]}]},
+        },
+    }
+    canon = canonical(rec)
+    ttm_rows = [s for s in canon["statements"] if s["period_type"] == "TTM"]
+    assert len(ttm_rows) == 1
+    # anchored to the latest quarter-end in the record (2026-03-31)
+    assert ttm_rows[0]["period_end"] == "2026-03-31"
+    assert ttm_rows[0]["fiscal_year"] == "FY2027"
+
+    # sanity: sections WITH annual columns still anchor to their own latest
+    rec2 = dict(rec)
+    rec2["sections"] = {
+        "profit_loss": {"headers": ["Mar 2024", "Mar 2025", "TTM"],
+                        "rows": [{"label": "Sales",
+                                  "values": [30.0, 40.0, 46.0]}]},
+        "quarterly_results": {"headers": ["Sep 2025"],
+                              "rows": [{"label": "Sales",
+                                        "values": [12.0]}]},
+    }
+    canon2 = canonical(rec2)
+    ttm2 = [s for s in canon2["statements"] if s["period_type"] == "TTM"]
+    assert ttm2[0]["period_end"] == "2025-03-31"
+
     # indicators: canonical keys with units, combined High/Low split
     keys = set(canon["indicators"].keys())
     assert "market_cap" in keys and "stock_pe" in keys

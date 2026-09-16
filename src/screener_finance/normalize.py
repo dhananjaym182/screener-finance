@@ -252,6 +252,16 @@ def canonical(
         indicators[key] = {"value": value, "unit": unit}
 
     # ---- statements (tidy time series) ----
+    # Record-wide latest quarter-end: fallback anchor for TTM columns in
+    # sections that carry *only* a TTM header (rare; 3 of 4,541 companies).
+    all_q_ends = [
+        p["period_end"]
+        for section in (record.get("sections") or {}).values()
+        for p in _section_periods(section.get("headers") or [])
+        if p and not p["period_type"] and p["period_end"]
+    ]
+    record_ttm_end = max(all_q_ends) if all_q_ends else ""
+
     statements: list[dict] = []
     for key, section in (record.get("sections") or {}).items():
         if section_filter and key not in section_filter:
@@ -263,7 +273,7 @@ def canonical(
         # section's latest quarter-end so every row stays joinable.
         q_ends = [p["period_end"] for p in periods
                   if p and not p["period_type"] and p["period_end"]]
-        ttm_end = max(q_ends) if q_ends else ""
+        ttm_end = max(q_ends) if q_ends else record_ttm_end
         ttm_fy = None
         if ttm_end:
             y, m = int(ttm_end[:4]), int(ttm_end[5:7])
