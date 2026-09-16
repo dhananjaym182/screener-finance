@@ -27,7 +27,7 @@ from __future__ import annotations
 __version__ = "0.3.0"
 
 from .ticker import Ticker
-from .download import download, batch_download
+from .download import download, batch_download, refresh
 from .search import search, compare
 from .session import configure
 from .normalize import canonical, parse_period

@@ -214,6 +214,36 @@ def batch(symbols, out_dir, fmt, symbols_file, keys_file):
 
 
 @cli.command()
+@click.argument("symbols", nargs=-1)
+@click.option("--out-dir", default="raw", show_default=True)
+@click.option("--symbols-file", type=click.Path(exists=True), default=None)
+@click.option("--keys-file", type=click.Path(exists=True), default=None,
+              help="TSV symbol<TAB>screener_key for BSE-only stocks (numeric codes)")
+def refresh(symbols, out_dir, symbols_file, keys_file):
+    """Incremental update: re-fetch pages, rewrite only changed companies.
+
+    Same one-request-per-company cost as a full batch, but unchanged
+    companies keep their existing files (and scraped_at) untouched —
+    perfect before a rebuild:  sfin refresh --out-dir raw && python3 tools/build_canonical.py
+    """
+    syms = list(symbols)
+    if symbols_file:
+        with open(symbols_file, encoding="utf-8") as fp:
+            syms += [ln.strip() for ln in fp if ln.strip() and not ln.startswith("#")]
+    keys = {}
+    if keys_file:
+        with open(keys_file, encoding="utf-8") as fp:
+            for ln in fp:
+                parts = ln.rstrip("\n").split("\t")
+                if len(parts) >= 2 and parts[0].strip():
+                    keys[parts[0].strip().upper()] = parts[1].strip()
+    if not syms:
+        raise click.UsageError("no symbols given")
+    summary = sf.refresh(syms, out_dir, keys=keys or None)
+    click.echo(json.dumps(summary, indent=1))
+
+
+@cli.command()
 @click.argument("symbols", nargs=-1, required=True)
 def compare(symbols):
     """Side-by-side key metrics for several symbols."""
