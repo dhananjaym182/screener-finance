@@ -297,12 +297,12 @@ import types  # noqa: E402  (used by peers test)
 def test_parse_period():
     # Fiscal year ends Mar: Mar 2015 == FY2015, ends 2015-03-31
     p = parse_period("Mar 2015")
-    assert p == {"period_end": "2015-03-31", "fiscal_year": "FY2015",
-                 "period_type": None}, p
+    assert (p["period_end"], p["fiscal_year"], p["period_type"],
+            p["stub"]) == ("2015-03-31", "FY2015", None, False), p
     # Non-Mar quarters roll into the next fiscal year: Jun 2023 -> FY2024
     p = parse_period("Jun 2023")
-    assert p == {"period_end": "2023-06-30", "fiscal_year": "FY2024",
-                 "period_type": None}, p
+    assert (p["period_end"], p["fiscal_year"], p["period_type"],
+            p["stub"]) == ("2023-06-30", "FY2024", None, False), p
     # TTM column
     p = parse_period("TTM")
     assert p is not None and p["period_type"] == "TTM", p
@@ -312,6 +312,17 @@ def test_parse_period():
     # non-periods
     assert parse_period("Revenue") is None
     assert parse_period("") is None
+    # audited/extended-period stub columns: "Mar 2015 15m" = 15 months of
+    # figures in a column ending Mar 2015. Kept as a real, joinable period
+    # (previously returned None and the whole column was dropped).
+    p = parse_period("Mar 2015 15m")
+    assert p == {"period_end": "2015-03-31", "fiscal_year": "FY2015",
+                 "period_type": None, "stub": True, "stub_months": 15}, p
+    p = parse_period("Jun 2011 6m")
+    assert p["period_end"] == "2011-06-30" and p["fiscal_year"] == "FY2012", p
+    assert p["stub"] is True and p["stub_months"] == 6, p
+    # regular columns are explicitly marked non-stub
+    assert parse_period("Mar 2015")["stub"] is False
 
 
 def test_map_labels():
@@ -327,6 +338,55 @@ def test_map_labels():
     assert map_ratio_label("Market Cap") == "market_cap"
     assert map_ratio_label("Stock P/E") == "stock_pe"
     assert map_ratio_label("High / Low") == "high_low"
+    # audit: previously leaked through the fallback mapping as "opm",
+    # "tax" (ok by luck), "interest", "no_of_shares"
+    assert map_item_label("OPM %") == "opm_pct"
+    assert map_item_label("Tax %") == "tax"
+    assert map_item_label("Interest") == "finance_cost"  # == quarterly "Finance Cost"
+    assert map_item_label("No. of Shares") == "shares_outstanding"
+
+
+def test_canonical_derived_liabilities_ex_equity():
+    """Altman X4 needs liabilities EXCLUDING equity; Screener's 'Total
+    Liabilities' is the grand total (== Total Assets). canonical() must emit
+    borrowings + other_liabilities per period, flagged derived, without
+    overwriting scraped rows or emitting periods with missing components."""
+    rec = {
+        "symbol": "ZTEST", "name": "Z Ltd", "view": "consolidated",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "balance_sheet": {
+                "headers": ["Mar 2014", "Mar 2015", "Mar 2016"],
+                "rows": [
+                    {"label": "Borrowings +",
+                     "values": [500.0, 600.0, 700.0]},
+                    {"label": "Other Liabilities +",
+                     "values": [300.0, 350.0, None]},
+                    {"label": "Total Liabilities +",
+                     "values": [1050.0, 1200.0, 1300.0]},
+                ],
+            },
+        },
+    }
+    canon = canonical(rec)
+    bs = [s for s in canon["statements"] if s["section"] == "balance_sheet"]
+
+    derived = [s for s in bs if s["item"] == "liabilities_ex_equity"]
+    assert [(s["period_end"], s["value"]) for s in derived] == [
+        ("2014-03-31", 800.0), ("2015-03-31", 950.0)], derived
+    assert all(s.get("derived") is True for s in derived)
+    assert all(s["source_items"] == ["borrowings", "other_liabilities"]
+               for s in derived)
+    # FY2016 has other_liabilities = None -> no derived row for it
+    assert not any(s["period_end"] == "2016-03-31" for s in derived)
+
+    # scraped rows must be untouched and not overwritten
+    for item, vals in (("borrowings", [500.0, 600.0, 700.0]),
+                       ("other_liabilities", [300.0, 350.0, None]),
+                       ("total_liabilities", [1050.0, 1200.0, 1300.0])):
+        rows = [s for s in bs if s["item"] == item and not s.get("derived")]
+        assert [s["value"] for s in rows] == vals, (item, rows)
+        assert not any(s.get("derived") for s in rows)
 
 
 def test_canonical_structure():
@@ -409,6 +469,34 @@ def test_canonical_ttm_only_section_uses_record_anchor():
     assert "label" not in blob
 
 
+def test_canonical_keeps_audited_stub_columns():
+    """Audited-period stub columns ("Mar 2015 15m") must survive canonical()
+    as joinable FY rows, and must not disturb TTM anchoring."""
+    rec = {
+        "symbol": "STUB", "name": "Stub Ltd", "view": "consolidated",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "profit_loss": {
+                "headers": ["Mar 2014 15m", "Mar 2015", "TTM"],
+                "rows": [{"label": "Sales", "values": [100.0, 200.0, 250.0]}],
+            },
+        },
+    }
+    canon = canonical(rec)
+    pl = [s for s in canon["statements"] if s["section"] == "profit_loss"]
+    stub_rows = [s for s in pl if s["period_end"] == "2014-03-31"]
+    assert len(stub_rows) == 1 and stub_rows[0]["value"] == 100.0, pl
+    assert stub_rows[0]["period_type"] == "FY"
+    assert stub_rows[0]["fiscal_year"] == "FY2014"
+    # TTM still anchors to the latest REAL annual column, not the stub
+    ttm = [s for s in pl if s["period_type"] == "TTM"]
+    assert ttm and ttm[0]["period_end"] == "2015-03-31", pl
+    # stub value must not overwrite the real FY2015 value
+    fy15 = [s for s in pl if s["period_end"] == "2015-03-31"
+            and s["period_type"] == "FY"]
+    assert len(fy15) == 1 and fy15[0]["value"] == 200.0, pl
+
+
 def test_canonical_ticker_method_and_exports():
     import screener_finance.session as sess_mod
     from screener_finance.ticker import Ticker
@@ -466,5 +554,7 @@ if __name__ == "__main__":
     test_parse_period()
     test_map_labels()
     test_canonical_structure()
+    test_canonical_keeps_audited_stub_columns()
+    test_canonical_derived_liabilities_ex_equity()
     test_canonical_ticker_method_and_exports()
     print("ALL OFFLINE TESTS PASSED")

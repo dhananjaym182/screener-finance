@@ -35,6 +35,15 @@ _MONTHS = {
 _PERIOD_RE = re.compile(
     r"^([A-Za-z]{3})\s*(\d{2,4})(?:\s*(TTM|TTM\+))?$", re.I)
 
+# Audited/extended-period stub column: "Mar 2015 15m" (the trailing NNm is
+# how many months of figures the column contains). Kept as a real, joinable
+# period at the stated end month; the stub suffix is exposed via `stub`.
+# The affected P&L section always carries real "Mar YYYY" annual columns too,
+# so stub columns are excluded from TTM anchoring (they are never the
+# latest annual figure).
+_STUB_PERIOD_RE = re.compile(
+    r"^([A-Za-z]{3})\s+(\d{4})\s+(\d{1,2})m$", re.I)
+
 
 def parse_period(text: str) -> dict[str, Any] | None:
     """'Mar 2015' -> ISO period_end + fiscal_year.
@@ -47,6 +56,24 @@ def parse_period(text: str) -> dict[str, Any] | None:
     if s.upper().rstrip("+") == "TTM":
         # Trailing-twelve-months column: no fixed period end.
         return {"period_end": "", "fiscal_year": None, "period_type": "TTM"}
+    sm = _STUB_PERIOD_RE.match(s)
+    if sm:
+        mon, yr, months_n = sm.group(1).lower(), int(sm.group(2)), int(sm.group(3))
+        if yr < 100:
+            yr += 2000
+        if mon not in _MONTHS:
+            return None
+        month = _MONTHS[mon]
+        import calendar
+        last_day = calendar.monthrange(yr, month)[1]
+        fiscal = yr if month == 3 else yr + 1
+        return {
+            "period_end": f"{yr:04d}-{month:02d}-{last_day:02d}",
+            "fiscal_year": f"FY{fiscal}",
+            "period_type": None,
+            "stub": True,
+            "stub_months": months_n,
+        }
     m = _PERIOD_RE.match(s)
     if not m:
         return None
@@ -65,6 +92,7 @@ def parse_period(text: str) -> dict[str, Any] | None:
         "period_end": f"{yr:04d}-{month:02d}-{last_day:02d}",
         "fiscal_year": f"FY{fiscal}",
         "period_type": "TTM" if tail.startswith("TTM") else None,
+        "stub": False,
     }
 
 
@@ -90,6 +118,12 @@ ITEM_MAP = {
     "other income": "other_income",
     "total income": "total_income",
     "expenses": "expenses",
+    # "OPM %" normalizes to "opm": it is the margin ratio row, kept under
+    # its own key instead of leaking through the fallback mapping.
+    "opm": "opm_pct",
+    # Annual P&L spells the item "Interest", quarterly spells it
+    # "Finance Cost" — same accounting item, one canonical key.
+    "interest": "finance_cost",
     "raw material cost": "raw_material_cost",
     "power and fuel": "power_and_fuel",
     "purchase of stock in trade": "purchase_of_stock_in_trade",
@@ -146,6 +180,7 @@ ITEM_MAP = {
     "no of shareholders": "shareholders",
     "no. of shareholders": "shareholders",
     "number of shareholders": "shareholders",
+    "no of shares": "shares_outstanding",
 }
 
 # Units for each canonical item (declared once, applied to the whole table).
@@ -171,6 +206,7 @@ UNITS = {
     "government_pct": "%",
     "public_pct": "%",
     "shareholders": "count",
+    "shares_outstanding": "count",
 }
 
 # Top-ratio label -> canonical key (screener spellings).
@@ -228,6 +264,12 @@ def canonical(
 
     No site field names, no period strings like "Mar 2015", no embedded
     units, no footnote marks survive this boundary.
+
+    Derived rows (marked `derived: True` with `source_items`, never
+    overwriting a scraped row):
+      liabilities_ex_equity = borrowings + other_liabilities, per period.
+      Screener's "Total Liabilities" is the grand total (equals Total
+      Assets); Altman Z's X4 needs the ex-equity figure.
     """
     import time as _time
 
@@ -258,7 +300,7 @@ def canonical(
         p["period_end"]
         for section in (record.get("sections") or {}).values()
         for p in _section_periods(section.get("headers") or [])
-        if p and not p["period_type"] and p["period_end"]
+        if p and not p["period_type"] and p["period_end"] and not p.get("stub")
     ]
     record_ttm_end = max(all_q_ends) if all_q_ends else ""
 
@@ -271,13 +313,17 @@ def canonical(
             continue
         # TTM columns have no fixed period of their own; anchor them to the
         # section's latest quarter-end so every row stays joinable.
+        # Stub (audited "NNm") columns are excluded: they are never the
+        # latest annual figure of a section.
         q_ends = [p["period_end"] for p in periods
-                  if p and not p["period_type"] and p["period_end"]]
+                  if p and not p["period_type"] and p["period_end"]
+                  and not p.get("stub")]
         ttm_end = max(q_ends) if q_ends else record_ttm_end
         ttm_fy = None
         if ttm_end:
             y, m = int(ttm_end[:4]), int(ttm_end[5:7])
             ttm_fy = f"FY{y if m == 3 else y + 1}"
+        rows_out: list[dict] = []
         for row in section.get("rows") or []:
             item = map_item_label(row["label"])
             values = row.get("values") or []
@@ -296,7 +342,7 @@ def canonical(
                     ptype = "Q"
                     period_end = period["period_end"]
                     fiscal_year = period["fiscal_year"]
-                statements.append({
+                rows_out.append({
                     "symbol": record["symbol"],
                     "view": record.get("view"),
                     "section": key,
@@ -306,6 +352,33 @@ def canonical(
                     "period_type": ptype,
                     "value": values[i],
                 })
+
+        # Derived: liabilities_ex_equity, per period (see docstring).
+        if key == "balance_sheet":
+            comps: dict[tuple, dict[str, Any]] = {}
+            for r in rows_out:
+                if r["item"] in ("borrowings", "other_liabilities"):
+                    k = (r["period_type"], r["period_end"], r["fiscal_year"])
+                    comps.setdefault(k, {})[r["item"]] = r["value"]
+            for k in sorted(comps, key=lambda k: k[1] or ""):
+                pair = comps[k]
+                b = pair.get("borrowings")
+                o = pair.get("other_liabilities")
+                if b is None or o is None:
+                    continue
+                rows_out.append({
+                    "symbol": record["symbol"],
+                    "view": record.get("view"),
+                    "section": key,
+                    "item": "liabilities_ex_equity",
+                    "period_end": k[1],
+                    "fiscal_year": k[2],
+                    "period_type": k[0],
+                    "value": b + o,
+                    "derived": True,
+                    "source_items": ["borrowings", "other_liabilities"],
+                })
+        statements.extend(rows_out)
 
     return {"meta": meta, "indicators": indicators, "statements": statements}
 
