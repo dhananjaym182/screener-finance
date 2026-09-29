@@ -74,7 +74,8 @@ def parse_financial_table(section_el) -> tuple[list[str], list[dict]]:
         cells = tr.select("td")
         if not cells:
             continue
-        label = _strip_footnote(cell_text(cells[0]))
+        raw_label = cell_text(cells[0])
+        label = _strip_footnote(raw_label)
         # Skip link-only rows screener appends to every table ("Raw PDF"):
         # they carry no numeric data and would leak as all-None artifacts.
         if label.strip().lower() in ("raw pdf", "raw pdf +", "raw pdf*"):
@@ -83,7 +84,14 @@ def parse_financial_table(section_el) -> tuple[list[str], list[dict]]:
         vals = [num(x) for x in raw]
         if len(vals) < len(headers):
             vals += [None] * (len(headers) - len(vals))
-        rows.append({"label": label, "values": vals[:len(headers)], "raw": raw})
+        rows.append({
+            "label": label,
+            "values": vals[:len(headers)],
+            "raw": raw,
+            # trailing "+" rows are expandable: their detail lives behind
+            # Screener's schedules AJAX endpoint (see schedules.py)
+            "expandable": raw_label.rstrip().endswith("+"),
+        })
     return headers, rows
 
 
@@ -143,6 +151,16 @@ def parse_warehouse_id(soup: BeautifulSoup) -> str | None:
     if el is None:
         el = soup.select_one("[data-warehouse-id]")
     return el["data-warehouse-id"] if el else None
+
+
+def parse_company_id(soup: BeautifulSoup) -> str | None:
+    """Screener's internal data-company-id (used by the schedules/chart APIs).
+
+    This is NOT the warehouse id: RELIANCE has data-company-id=2726 but
+    warehouse id 6598251. The schedules endpoint only accepts this one.
+    """
+    el = soup.select_one("[data-company-id]")
+    return el["data-company-id"] if el is not None else None
 
 
 def parse_peers_fragment(fragment: BeautifulSoup) -> dict:
@@ -208,6 +226,7 @@ def parse_company(symbol: str, view: str, soup: BeautifulSoup, source_url: str) 
         "name": name,
         "view": view,
         "warehouse_id": parse_warehouse_id(soup),
+        "company_id": parse_company_id(soup),
         "top_ratios": parse_top_ratios(soup),
         "sections": parse_all_sections(soup),
         "pros_cons": parse_pros_cons(soup),

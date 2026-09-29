@@ -14,6 +14,7 @@ unified into a single clean library:
     t.balance_sheet / t.cash_flow / t.ratios / t.shareholding
     t.peers                     # one small AJAX call, lazy + cached
     t.history("5y")             # one chart-API call, lazy + cached
+    t.schedules                 # "+"-row detail, one AJAX call per row
 
     sf.download(["SBIN", "TCS"])        # batch, paced by one shared session
     sf.batch_download(symbols, "out/")  # bulk to disk with resume
@@ -31,7 +32,9 @@ from .download import download, batch_download, refresh
 from .search import search, compare
 from .session import configure
 from .normalize import canonical, parse_period
+from .schedules import fetch_schedule, schedule_url, SCHEDULE_SECTIONS
 from . import universe
+from . import schedules
 from .exceptions import (
     CompanyNotFoundError,
     RateLimitError,
@@ -48,6 +51,10 @@ __all__ = [
     "configure",
     "canonical",
     "parse_period",
+    "schedules",
+    "fetch_schedule",
+    "schedule_url",
+    "SCHEDULE_SECTIONS",
     "universe",
     "ScreenerError",
     "CompanyNotFoundError",

@@ -1,0 +1,1588 @@
+[
+ {
+  "symbol": "AARTIIND",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Advance from Customers",
+   "Advance tax",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investment in group cos",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Receivables",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Share application money",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "BAJFINANCE",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 10,
+  "detail_parents_recovered": 10,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Building",
+   "Capital WIP",
+   "Cash Equivalents",
+   "Computers",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional CF items",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid",
+   "Interest received",
+   "Investment in group cos",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Loans Advances",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Operating investments",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Other operating items",
+   "Payables",
+   "Proceeds from borrowings",
+   "Proceeds from debentures",
+   "Proceeds from deposits",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from operations",
+   "Receivables",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Share application money",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 10,
+  "archive_meta_files": 10,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "interest_paid_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_cwip_movement": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "advance_from_customers",
+   "debt_lease",
+   "debt_long_term",
+   "debt_other",
+   "debt_short_term",
+   "inventories",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "CUMMINSIND",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans Advances",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Receivables",
+   "Redemp n Canc of Shares",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "debt_long_term",
+   "debt_other",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "HDFCBANK",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 10,
+  "detail_parents_recovered": 10,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Employee Cost %",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Gross Block",
+   "Invest in subsidiaries",
+   "Investments sold",
+   "Loans Advances",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Operating Deposits",
+   "Operating investments",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Proceeds from borrowings",
+   "Proceeds from debentures",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Redemption of debentures",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Trade Payables",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 10,
+  "archive_meta_files": 10,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "operating_deposits": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "advance_from_customers",
+   "capex_cwip_movement",
+   "debt_lease",
+   "debt_long_term",
+   "debt_other",
+   "debt_short_term",
+   "interest_paid_cf",
+   "inventories",
+   "receivables_wc_change",
+   "trade_receivables"
+  ]
+ },
+ {
+  "symbol": "HDFCLIFE",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Building",
+   "Cash Equivalents",
+   "Computers",
+   "Direct taxes",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid fin",
+   "Interest received",
+   "Investment income",
+   "Investments purchased",
+   "Investments sold",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Operating Deposits",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Other operating items",
+   "Payables",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from operations",
+   "Receivables",
+   "Redemp n Canc of Shares",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Share application money",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "operating_deposits": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "advance_from_customers",
+   "capex_cwip_movement",
+   "debt_lease",
+   "debt_long_term",
+   "debt_short_term",
+   "interest_paid_cf",
+   "inventories"
+  ]
+ },
+ {
+  "symbol": "INFY",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Computers",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Inter corporate deposits",
+   "Interest received",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans Advances",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Receivables",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "debt_long_term",
+   "debt_other",
+   "debt_short_term",
+   "interest_paid_cf",
+   "inventories",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "ITC",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Invest in subsidiaries",
+   "Investment in group cos",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Railway sidings",
+   "Receivables",
+   "Redemp n Canc of Shares",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "MARUTI",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Computers",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans Advances",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Railway sidings",
+   "Receivables",
+   "Redemp n Canc of Shares",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "RELIANCE",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Receivables",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Share application money",
+   "Ships Vessels",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "advance_from_customers",
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "SBIN",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 10,
+  "detail_parents_recovered": 10,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Gross Block",
+   "Interest paid fin",
+   "Interest received",
+   "Invest in subsidiaries",
+   "Investment in group cos",
+   "Investments purchased",
+   "Investments sold",
+   "Loans Advances",
+   "Loans n Advances",
+   "Manufacturing Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Operating Deposits",
+   "Operating borrowings",
+   "Operating investments",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Redemp n Canc of Shares",
+   "Sales Growth %",
+   "Share application money",
+   "Trade Payables",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 10,
+  "archive_meta_files": 10,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "operating_deposits": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "advance_from_customers",
+   "capex_cwip_movement",
+   "debt_lease",
+   "debt_long_term",
+   "debt_other",
+   "debt_short_term",
+   "interest_paid_cf",
+   "inventories",
+   "receivables_wc_change",
+   "trade_receivables"
+  ]
+ },
+ {
+  "symbol": "TATASTEEL",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Inter corporate deposits",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Preference Capital",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from Associates",
+   "Profit from operations",
+   "Railway sidings",
+   "Receivables",
+   "Redemp n Canc of Shares",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ },
+ {
+  "symbol": "TCS",
+  "summary_unchanged": true,
+  "summary_unchanged_note": "sections hash equal (top_ratios/prices excluded — they tick daily)",
+  "annual_plus_rows": 11,
+  "detail_parents_recovered": 11,
+  "detail_recovered": true,
+  "new_detail_labels": [
+   "Accumulated Depreciation",
+   "Acquisition of companies",
+   "Advance from Customers",
+   "Building",
+   "Cash Equivalents",
+   "Computers",
+   "Direct taxes",
+   "Dividends paid",
+   "Dividends received",
+   "Employee Cost %",
+   "Equipments",
+   "Exceptional items",
+   "Exceptional items AT",
+   "Financial liabilities",
+   "Fixed assets purchased",
+   "Fixed assets sold",
+   "Furniture n fittings",
+   "Gross Block",
+   "Intangible Assets",
+   "Inter corporate deposits",
+   "Interest paid fin",
+   "Interest received",
+   "Inventories",
+   "Inventory",
+   "Investments purchased",
+   "Investments sold",
+   "Land",
+   "Lease Liabilities",
+   "Loans Advances",
+   "Loans n Advances",
+   "Long term Borrowings",
+   "Manufacturing Cost %",
+   "Material Cost %",
+   "Minority share",
+   "Non controlling int",
+   "Other Borrowings",
+   "Other Cost %",
+   "Other WC items",
+   "Other asset items",
+   "Other financing items",
+   "Other fixed assets",
+   "Other income normal",
+   "Other investing items",
+   "Other liability items",
+   "Payables",
+   "Plant Machinery",
+   "Proceeds from borrowings",
+   "Proceeds from shares",
+   "Profit Growth %",
+   "Profit excl Excep",
+   "Profit for EPS",
+   "Profit for PE",
+   "Profit from operations",
+   "Receivables",
+   "Repayment of borrowings",
+   "Sales Growth %",
+   "Short term Borrowings",
+   "Trade Payables",
+   "Trade receivables",
+   "Vehicles",
+   "Working capital changes"
+  ],
+  "idempotent": true,
+  "archive_files": 11,
+  "archive_meta_files": 11,
+  "raw_archive_ok": true,
+  "fields_available": {
+   "debt_long_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_short_term": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_lease": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "debt_other": {
+    "from_parent": "Borrowings",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_payables": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "advance_from_customers": {
+    "from_parent": "Other Liabilities",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "trade_receivables": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "cash_equivalents": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "loans_and_advances": {
+    "from_parent": "Other Assets",
+    "section": "balance_sheet",
+    "periods": 12
+   },
+   "receivables_wc_change": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "inventories": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "direct_taxes_cf": {
+    "from_parent": "Cash from Operating Activity",
+    "section": "cash_flow",
+    "periods": 12
+   },
+   "capex_fixed_assets_purchased": {
+    "from_parent": "Cash from Investing Activity",
+    "section": "cash_flow",
+    "periods": 12
+   }
+  },
+  "fields_missing": [
+   "capex_cwip_movement",
+   "interest_paid_cf",
+   "operating_deposits"
+  ]
+ }
+]

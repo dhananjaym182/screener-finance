@@ -488,6 +488,11 @@ def test_canonical_keeps_audited_stub_columns():
     assert len(stub_rows) == 1 and stub_rows[0]["value"] == 100.0, pl
     assert stub_rows[0]["period_type"] == "FY"
     assert stub_rows[0]["fiscal_year"] == "FY2014"
+    # PHASE 6: the non-12-month duration survives at ROW level — a stub row
+    # is never silently comparable to a normal fiscal year
+    assert stub_rows[0]["stub"] is True and stub_rows[0]["stub_months"] == 15
+    normal_rows = [s for s in pl if s["period_end"] == "2015-03-31"]
+    assert normal_rows[0]["stub"] is False and normal_rows[0]["stub_months"] is None
     # TTM still anchors to the latest REAL annual column, not the stub
     ttm = [s for s in pl if s["period_type"] == "TTM"]
     assert ttm and ttm[0]["period_end"] == "2015-03-31", pl
@@ -524,7 +529,8 @@ def test_canonical_ticker_method_and_exports():
             assert loaded["meta"]["symbol"] == "SBIN"
 
         tidy = t.canonical_tidy_csv()
-        assert tidy.splitlines()[0].startswith("symbol,view,section,item")
+        assert tidy.splitlines()[0].startswith(
+            "symbol,view,section,item,period_end,fiscal_year,period_type,value,stub,stub_months")
         assert "2023-09-30" in tidy
 
         ind = t.canonical_indicators_csv()

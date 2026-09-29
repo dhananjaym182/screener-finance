@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 from .exceptions import ScreenerError, ViewUnavailableError
 from .parse import num, parse_company
+from .schedules import fetch_all_schedules
 from .session import BASE_URL, get_session
 
 VALID_VIEWS = ("consolidated", "standalone")
@@ -68,6 +69,7 @@ class Ticker:
         self.key = str(key).strip() if key else None
         self._record: dict[str, Any] | None = None
         self._company_id: str | None = None
+        self._schedules: dict[str, dict[str, Any]] | None = None
         self._history_cache: dict[str, "pd.DataFrame"] = {}
 
     # ------------------------------------------------------------------
@@ -108,6 +110,7 @@ class Ticker:
             self.view = other
 
         self._record = record
+        self._company_id = record.get("company_id")
         return record
 
     @property
@@ -300,15 +303,9 @@ class Ticker:
 
         sess = get_session()
         rec = self.fetch()
-        company_id = self._company_id
+        company_id = self._company_id or rec.get("company_id")
         if company_id is None:
-            from bs4 import BeautifulSoup
-            soup = sess.get_soup(rec["source_url"].replace(BASE_URL, ""))
-            el = soup.select_one("[data-company-id]")
-            if el is None:
-                raise ScreenerError(f"could not find company id for {self.symbol}")
-            company_id = el["data-company-id"]
-            self._company_id = company_id
+            raise ScreenerError(f"could not find company id for {self.symbol}")
 
         chart_text = sess.get_text(
             f"/api/company/{company_id}/chart/?period={days}&interval=1d")
@@ -355,6 +352,58 @@ class Ticker:
 
         self._history_cache[period] = df
         return df
+
+    # ------------------------------------------------------------------
+    # Schedule detail ("+" rows) — lazy, one AJAX call per expandable row
+    # ------------------------------------------------------------------
+
+    def fetch_schedules(self, archive_dir: str | None = None,
+                        sections: tuple[str, ...] | None = None,
+                        force: bool = False) -> dict[str, dict[str, Any]]:
+        """Fetch schedule detail for every expandable ("+") row.
+
+        One small AJAX call per expandable row (~10-12 per company for the
+        annual sections), paced by the shared session throttle and cached on
+        the Ticker. When archive_dir is set, every raw response body is
+        archived verbatim BEFORE parsing (raw-first provenance policy), so
+        reprocessing never needs to re-scrape.
+
+            t = sf.Ticker("RELIANCE")
+            t.fetch()
+            sched = t.fetch_schedules(archive_dir="raw/")
+            sched["balance_sheet"]["Borrowings"]["rows"]
+            # {"Long term Borrowings": {"values": {"Mar 2015": 128165.0, ...}},
+            #  "Short term Borrowings": {...}, ...}
+
+        sections: defaults to the annual P&L / balance sheet / cash flow
+        (quarterly_results payloads are display-derived; pass
+        sections=sf.schedules.SCHEDULE_SECTIONS to include them).
+        """
+        from .schedules import SCHEDULE_SECTIONS as _ANNUAL
+        if self._schedules is not None and not force:
+            return self._schedules
+        rec = self.fetch()
+        res = fetch_all_schedules(
+            rec, archive_dir=archive_dir,
+            sections=tuple(sections) if sections else
+            tuple(k for k in _ANNUAL if k != "quarterly_results"))
+        self._schedules = res
+        return res
+
+    @property
+    def schedules(self) -> dict[str, dict[str, Any]]:
+        """Schedule detail for all expandable rows (lazy; cached)."""
+        return self.fetch_schedules()
+
+    def to_schedules_json(self, archive_dir: str) -> str:
+        """Fetch + archive all schedule detail; return the archive dir used.
+
+        Layout: <archive_dir>/<SYMBOL>/<view>/<section>__<parent>.json,
+        each with a .meta.json sidecar (provider, company, section, parent
+        label, endpoint, status, retrieved_at, referer, view).
+        """
+        self.fetch_schedules(archive_dir=archive_dir, force=True)
+        return archive_dir
 
     # ------------------------------------------------------------------
     # Exports (free — operate on the fetched record)

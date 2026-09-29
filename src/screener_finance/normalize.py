@@ -270,6 +270,10 @@ def canonical(
       liabilities_ex_equity = borrowings + other_liabilities, per period.
       Screener's "Total Liabilities" is the grand total (equals Total
       Assets); Altman Z's X4 needs the ex-equity figure.
+
+    Every statement row carries `stub` / `stub_months`: audited
+    extended-period columns ("Mar 2015 15m" = 15 months of figures) stay
+    flagged so consumers never treat them as 12-month fiscal years.
     """
     import time as _time
 
@@ -351,6 +355,11 @@ def canonical(
                     "fiscal_year": fiscal_year,
                     "period_type": ptype,
                     "value": values[i],
+                    # audited/extended-period columns ("Mar 2015 15m") keep
+                    # their non-12-month duration semantics: never silently
+                    # comparable to a normal fiscal year.
+                    "stub": bool(period.get("stub")),
+                    "stub_months": period.get("stub_months"),
                 })
 
         # Derived: liabilities_ex_equity, per period (see docstring).
@@ -389,7 +398,7 @@ def canonical(
 
 TIDY_COLUMNS = [
     "symbol", "view", "section", "item", "period_end",
-    "fiscal_year", "period_type", "value",
+    "fiscal_year", "period_type", "value", "stub", "stub_months",
 ]
 
 
