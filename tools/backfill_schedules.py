@@ -27,6 +27,9 @@ import json
 import os
 import sys
 import time
+from contextlib import suppress
+
+LOCK_FILE = os.path.expanduser("~/.schedules_backfill.lock")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -113,6 +116,30 @@ def backfill_symbol(sym: str, db: str, archive: str, keys: dict[str, str],
             "company_id": fresh.get("company_id")}
 
 
+def acquire_lock() -> bool:
+    """Single-instance guard: two concurrent runners would double-hit the
+    site and race on the same archive files."""
+    try:
+        if os.path.exists(LOCK_FILE):
+            with open(LOCK_FILE, encoding="utf-8") as fp:
+                pid = int(fp.read().strip() or 0)
+            if pid and os.path.exists(f"/proc/{pid}"):
+                return False
+        with open(LOCK_FILE, "w", encoding="utf-8") as fp:
+            fp.write(str(os.getpid()))
+        return True
+    except OSError:
+        return False
+
+
+def release_lock() -> None:
+    with suppress(OSError):
+        if os.path.exists(LOCK_FILE):
+            with open(LOCK_FILE, encoding="utf-8") as fp:
+                if fp.read().strip() == str(os.getpid()):
+                    os.remove(LOCK_FILE)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", default=DEFAULT_DB)
@@ -127,7 +154,15 @@ def main() -> None:
                     help="ignore completion markers and re-run symbols")
     ap.add_argument("--pilot", action="store_true",
                     help="5-symbol verification run")
+    ap.add_argument("--minutes", type=float, default=0,
+                    help="stop cleanly after N minutes (0 = until done); "
+                         "re-run the same command to resume — completed "
+                         "symbols are skipped with zero requests")
     args = ap.parse_args()
+    if not acquire_lock():
+        print("another backfill instance is already running (lock: "
+              f"{LOCK_FILE}) — exiting", flush=True)
+        return
 
     os.makedirs(args.archive, exist_ok=True)
     sf.configure(
@@ -153,10 +188,15 @@ def main() -> None:
     ok = done_before = no_raw = failed = payloads = 0
     errors: list[tuple[str, str]] = []
     t0 = time.time()
-    blocked_stop = False
+    blocked_stop = time_stop = False
     i = 0
 
     for i, sym in enumerate(symbols, 1):
+        if args.minutes and (time.time() - t0) > args.minutes * 60:
+            print(f"time budget of {args.minutes}min reached — stopping "
+                  "cleanly; re-run the same command to resume", flush=True)
+            time_stop = True
+            break
         try:
             r = backfill_symbol(sym, args.db, args.archive, keys,
                                 skip_existing=not args.no_skip_existing)
@@ -189,6 +229,8 @@ def main() -> None:
             blocked_stop = True
             break
 
+    release_lock()
+
     if errors:
         with open(os.path.join(args.archive, "errors.log"), "a",
                   encoding="utf-8") as fp:
@@ -202,7 +244,8 @@ def main() -> None:
                "blocked_403": sess.stats["blocked"],
                "rate_limited_429": sess.stats["rate_limited"],
                "elapsed_s": round(time.time() - t0, 1),
-               "aborted_on_blocks": blocked_stop}
+               "aborted_on_blocks": blocked_stop,
+               "stopped_on_time_budget": time_stop}
     with open(os.path.join(args.archive, "last_run_summary.json"), "w",
               encoding="utf-8") as fp:
         json.dump(summary, fp, indent=1)
