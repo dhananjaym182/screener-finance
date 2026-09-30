@@ -386,6 +386,10 @@ def canonical(
                     "value": b + o,
                     "derived": True,
                     "source_items": ["borrowings", "other_liabilities"],
+                    # keep the full TIDY_COLUMNS shape so the tidy CSV
+                    # projection never KeyErrors on derived rows
+                    "stub": False,
+                    "stub_months": None,
                 })
         statements.extend(rows_out)
 

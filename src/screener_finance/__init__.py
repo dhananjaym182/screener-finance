@@ -33,6 +33,7 @@ from .search import search, compare
 from .session import configure
 from .normalize import canonical, parse_period
 from .schedules import fetch_schedule, schedule_url, SCHEDULE_SECTIONS
+from . import schedules_normalize
 from . import universe
 from . import schedules
 from .exceptions import (
@@ -52,6 +53,7 @@ __all__ = [
     "canonical",
     "parse_period",
     "schedules",
+    "schedules_normalize",
     "fetch_schedule",
     "schedule_url",
     "SCHEDULE_SECTIONS",

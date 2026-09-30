@@ -173,30 +173,38 @@ provenance sidecar, skip_existing (no overwrite, zero requests),
 Ticker-level caching, malformed-body handling. Both suites pass
 (`ALL OFFLINE TESTS PASSED`, `ALL SCHEDULES TESTS PASSED`).
 
-## Phase 7 — backfill design (NOT executed)
+## Phase 7 — backfill (EXECUTED 2026-09-28 → 2026-09-30)
 
-- Measured: ~10 annual `+` rows/company (14–15 with quarterly) → ~1.3M
-  requests for 4,541 companies (460K annual-only).
-- Runtime @ 2.2s/req: ~11 days full, ~4 days annual-only, ~13h for Nifty
-  500 (annual-only); halve via 2 proxies.
-- Storage: ~1.4KB/payload → ~70MB full universe + sidecars.
-- Rate limits: none observed (430+ requests this audit, 0×403/429) at
-  1.2–1.5s pacing; keep delay ≥1.5s, pause on 429 (Retry-After), abort on
-  repeated 403.
-- Order: 50 representative → Nifty 500 → rest. `skip_existing=True` makes
-  every re-run resume with zero requests and zero overwrites; failures
-  logged to errors.log and retried next run.
+- Full run: 4,541 symbols, 54,029 requests, 49,558 payloads, 0×403,
+  0×429, ~18.8h at delay=1.0–1.5s. Archive: `raw_schedules/<SYM>/<view>/`
+  with provenance sidecars; `_backfill_done.json` markers make every
+  re-run resume at zero requests.
+- Outcome: 4,540/4,541 done. SHINDL/SHINEFASH/SHIPROCKET succeeded on
+  retry (transient 503s); HEG succeeded under its renamed slug `HEGAM`
+  (universe_keys.tsv row added); SANGINITA now 404s on Screener
+  (delisted after the 2026-09-15 scrape) — structural gap, raw record
+  retained.
+- Volume: ~1.43M schedule rows promoted to canonical (Phase 8),
+  ~320 pts/symbol where schedules exist; 3,072 of 4,540 symbols have
+  expandable rows (the rest have none — structural, not a gap).
 
-## Phase 8 — canonical ingestion policy (before any metric exposure)
+## Phase 8 — canonical ingestion (IMPLEMENTED: `schedules_normalize.py`)
 
-Keep provider labels verbatim in observations; map to canonical keys only
-via an explicit exact-label taxonomy (no string similarity); never merge
-`Working capital changes` with its components; treat display-derived %
-rows as non-metric; nested children get their own nodes; authority policy:
-schedules are the only source for capex/cash/debt detail → authoritative,
-not a reconciliation candidate.
+Keep provider labels verbatim in observations (`detail_label` column);
+map to canonical keys only via an explicit exact-label taxonomy
+(`SCHEDULE_ITEM_MAP`, 95 triples — no string similarity); never merge
+`Working capital changes` with its components (flagged via
+`SCHEDULE_AGGREGATE_ITEMS`); display-derived % rows are `metric: False`
+(`SCHEDULE_NON_METRIC_ITEMS`); nested children get their own nodes;
+authority policy: schedules are the only source for capex/cash/debt
+detail → authoritative, not a reconciliation candidate. Ingestion is
+offline and marker-gated: only symbols with `_backfill_done.json` are
+promoted (`ingest_archive`, `require_done_marker=True`).
 
-## Status: STOPPED before full backfill
+## Status: Phases 1–8 COMPLETE (2026-09-30)
 
-Scraper fix verified on the 12-company sample; no canonical DB changed;
-no full-universe scraping performed. Awaiting review.
+Scraper fix verified (12-company sample); full-universe schedule
+backfill executed (4,540/4,541; SANGINITA delisted upstream); canonical
+schedule layer implemented + 13 offline tests; dataset rebuilt with the
+schedules panel (`canonical/schedules.csv.gz`, 1.43M rows over 3,072
+symbols with expandable rows).
