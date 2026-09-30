@@ -106,11 +106,16 @@ def test_expandable_flag_and_company_id_parsed():
 
 
 def test_schedule_url_shape():
+    # standalone (default) OMITS the param: an empty consolidated= value is
+    # treated as consolidated server-side and yields {} for standalone-only
+    # filers (verified live, 2026-09-30)
     url = schedule_url("2726", "Borrowings", "balance-sheet")
     assert url == ("https://www.screener.in/api/company/2726/schedules/"
-                   "?parent=Borrowings&section=balance-sheet&consolidated=")
+                   "?parent=Borrowings&section=balance-sheet")
     url = schedule_url("2726", "Borrowings", "balance-sheet", "1")
     assert url.endswith("consolidated=1")
+    url = schedule_url("2726", "Borrowings", "balance-sheet", None)
+    assert "consolidated" not in url
 
 
 # ---- semantics: parent == sum(children) where structurally expected ----------

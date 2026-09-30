@@ -52,11 +52,20 @@ def slug(text: str) -> str:
 
 
 def schedule_url(company_id: str, parent: str, section_dom_id: str,
-                 consolidated: str = "") -> str:
-    """Exact schedules endpoint for one expandable row."""
-    return (f"{BASE_URL}/api/company/{company_id}/schedules/"
-            f"?parent={quote(parent)}&section={quote(section_dom_id)}"
-            f"&consolidated={quote(consolidated)}")
+                 consolidated: str | None = None) -> str:
+    """Exact schedules endpoint for one expandable row.
+
+    consolidated: "1" for the consolidated view, None to omit the param
+    entirely (= standalone). Verified live (2026-09-30): for
+    standalone-only filers, sending `consolidated=` with an EMPTY value is
+    treated as a consolidated request and returns {}; only omitting the
+    parameter selects the standalone dataset.
+    """
+    url = (f"{BASE_URL}/api/company/{company_id}/schedules/"
+           f"?parent={quote(parent)}&section={quote(section_dom_id)}")
+    if consolidated is not None:
+        url += f"&consolidated={quote(consolidated)}"
+    return url
 
 
 def parse_schedule_json(text: str) -> dict[str, dict[str, Any]]:
@@ -134,7 +143,9 @@ def fetch_schedule(record: dict[str, Any], parent_label: str, section_key: str,
                    "ratios": "ratios", "shareholding": "shareholding",
                    }.get(section_key, section_key.replace("_", "-"))
     view = record.get("view") or "consolidated"
-    consolidated = "1" if view == "consolidated" else ""
+    # standalone = param OMITTED (an empty value still means "consolidated"
+    # server-side and yields {} for standalone-only filers)
+    consolidated = "1" if view == "consolidated" else None
 
     if skip_existing and archive_dir:
         existing = os.path.join(
