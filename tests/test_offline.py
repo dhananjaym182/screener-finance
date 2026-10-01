@@ -24,6 +24,7 @@ from screener_finance.normalize import (
     map_item_label,
     map_ratio_label,
     parse_period,
+    resolve_stub_periods,
 )
 
 HTML = """
@@ -383,10 +384,50 @@ def test_canonical_derived_liabilities_ex_equity():
     # scraped rows must be untouched and not overwritten
     for item, vals in (("borrowings", [500.0, 600.0, 700.0]),
                        ("other_liabilities", [300.0, 350.0, None]),
-                       ("total_liabilities", [1050.0, 1200.0, 1300.0])):
+                       ("total_equity_and_liabilities", [1050.0, 1200.0, 1300.0])):
         rows = [s for s in bs if s["item"] == item and not s.get("derived")]
         assert [s["value"] for s in rows] == vals, (item, rows)
         assert not any(s.get("derived") for s in rows)
+
+
+def test_canonical_nbfc_borrowing_and_deposits_templates():
+    """NBFC/lender templates spell the row 'Borrowing' (singular) and
+    deposit-takers add 'Deposits'; both must map canonically and both
+    must feed liabilities_ex_equity (previously 219 NBFC symbols had no
+    ex-equity figure at all because 'Borrowing' was unmapped)."""
+    rec = {
+        "symbol": "NBFC", "name": "NBFC Ltd", "view": "standalone",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "balance_sheet": {
+                "headers": ["Mar 2023", "Mar 2024"],
+                "rows": [
+                    {"label": "Borrowing",
+                     "values": [800.0, 900.0]},
+                    {"label": "Deposits",
+                     "values": [100.0, 120.0]},
+                    {"label": "Other Liabilities",
+                     "values": [50.0, 60.0]},
+                    {"label": "Total Liabilities",
+                     "values": [950.0, 1080.0]},
+                ],
+            },
+        },
+    }
+    canon = canonical(rec)
+    bs = [s for s in canon["statements"] if s["section"] == "balance_sheet"]
+    by_item = {item: sorted(s["value"] for s in bs if s["item"] == item)
+               for item in ("borrowings", "deposits",
+                            "total_equity_and_liabilities")}
+    assert by_item["borrowings"] == [800.0, 900.0]
+    assert by_item["deposits"] == [100.0, 120.0]
+    assert by_item["total_equity_and_liabilities"] == [950.0, 1080.0]
+    derived = [s for s in bs if s["item"] == "liabilities_ex_equity"]
+    # deposits included: 800+100+50 = 950 / 900+120+60 = 1080
+    assert sorted(s["value"] for s in derived) == [950.0, 1080.0], derived
+    assert all(s.get("source_items") == ["borrowings", "deposits",
+                                         "other_liabilities"]
+               for s in derived)
 
 
 def test_canonical_structure():
@@ -469,6 +510,106 @@ def test_canonical_ttm_only_section_uses_record_anchor():
     assert "label" not in blob
 
 
+def test_parse_period_jan_feb_fiscal_year():
+    """Jan/Feb end months fall INSIDE the fiscal year ending Mar of the
+    SAME calendar year: a transition stub 'Jan 2026' is FY2026, never
+    FY2027 (which would sort it AFTER the FY2026 annual column)."""
+    for header, fy in (("Jan 2026", "FY2026"), ("Feb 2026", "FY2026"),
+                       ("Jan 2026 10m", "FY2026")):
+        p = parse_period(header)
+        assert p["fiscal_year"] == fy, (header, p)
+    # non-March regular months still roll forward (Jun 2023 -> FY2024)
+    assert parse_period("Jun 2023")["fiscal_year"] == "FY2024"
+    assert parse_period("Dec 2014")["fiscal_year"] == "FY2015"
+
+
+def test_canonical_stub_flags_apply_to_every_section():
+    """Stub-ness is a property of the (symbol, view, period_end) period.
+    The site prints the 'NNm' suffix only on the P&L header; other
+    sections carry plain headers for the SAME period and must still be
+    flagged stub (Defect A: 103 periods had mixed flags)."""
+    rec = {
+        "symbol": "MIX", "name": "Mixed Ltd", "view": "consolidated",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "profit_loss": {
+                "headers": ["Mar 2022", "Mar 2023 15m", "Mar 2024"],
+                "rows": [{"label": "Sales",
+                          "values": [10.0, 11.0, 12.0]}],
+            },
+            # plain header for the same stub period (as on the site)
+            "balance_sheet": {
+                "headers": ["Mar 2022", "Mar 2023", "Mar 2024"],
+                "rows": [{"label": "Total Assets",
+                          "values": [20.0, 21.0, 22.0]}],
+            },
+            "ratios": {
+                "headers": ["Mar 2022", "Mar 2023", "Mar 2024"],
+                "rows": [{"label": "ROCE",
+                          "values": [30.0, 31.0, 32.0]}],
+            },
+        },
+    }
+    canon = canonical(rec)
+    per = {}
+    for s in canon["statements"]:
+        if s["period_end"] == "2023-03-31":
+            per.setdefault(s["section"], []).append(s)
+    assert set(per) == {"profit_loss", "balance_sheet", "ratios"}
+    for sec, rows in per.items():
+        for r in rows:
+            assert r["stub"] is True and r["stub_months"] == 15, (sec, r)
+            assert r["period_type"] == "STUB", (sec, r)
+    # normal periods remain unflagged FY
+    normal = [s for s in canon["statements"]
+              if s["period_end"] == "2024-03-31"]
+    assert all(s["stub"] is False and s["period_type"] == "FY"
+               for s in normal)
+
+
+def test_canonical_transition_stub_period_type_and_fy():
+    """ONEINDIG case: 'Jan 2026 10m' P&L header with plain 'Jan 2026'
+    balance-sheet header. The period must be stub=True in EVERY section,
+    period_type 'STUB' (not 'Q'), and fiscal_year FY2026 (not FY2027,
+    which would sort after the FY2026 annual column)."""
+    rec = {
+        "symbol": "TRANS", "name": "Transition Ltd", "view": "consolidated",
+        "top_ratios": {}, "pros_cons": {}, "about": "", "documents": [],
+        "sections": {
+            "profit_loss": {
+                "headers": ["Mar 2025", "Jan 2026 10m", "Mar 2026"],
+                "rows": [{"label": "Sales", "values": [1.0, 2.0, 3.0]}],
+            },
+            "balance_sheet": {
+                "headers": ["Mar 2025", "Jan 2026", "Mar 2026"],
+                "rows": [{"label": "Total Assets",
+                          "values": [1.0, 2.0, 3.0]}],
+            },
+        },
+    }
+    canon = canonical(rec)
+    jan = [s for s in canon["statements"]
+           if s["period_end"] == "2026-01-31"]
+    assert len(jan) == 4  # 2 sections x 2 items (incl. derived BS row)
+    for r in jan:
+        assert r["stub"] is True, r
+        assert r["period_type"] == "STUB", r
+        assert r["fiscal_year"] == "FY2026", r
+    # P&L stub rows keep the explicit month count
+    pl_jan = [r for r in jan if r["section"] == "profit_loss"]
+    assert all(r["stub_months"] == 10 for r in pl_jan)
+    # balance-sheet rows have unknown duration (no suffix on that header)
+    bs_jan = [r for r in jan if r["section"] == "balance_sheet"]
+    assert all(r["stub_months"] is None for r in bs_jan)
+    # and no period sorts out of fiscal-year order
+    pl_periods = sorted({(s["fiscal_year"], s["period_end"])
+                         for s in canon["statements"]
+                         if s["section"] == "profit_loss"})
+    assert pl_periods == [("FY2025", "2025-03-31"),
+                          ("FY2026", "2026-01-31"),
+                          ("FY2026", "2026-03-31")]
+
+
 def test_canonical_keeps_audited_stub_columns():
     """Audited-period stub columns ("Mar 2015 15m") must survive canonical()
     as joinable FY rows, and must not disturb TTM anchoring."""
@@ -486,7 +627,8 @@ def test_canonical_keeps_audited_stub_columns():
     pl = [s for s in canon["statements"] if s["section"] == "profit_loss"]
     stub_rows = [s for s in pl if s["period_end"] == "2014-03-31"]
     assert len(stub_rows) == 1 and stub_rows[0]["value"] == 100.0, pl
-    assert stub_rows[0]["period_type"] == "FY"
+    # a 15-month period is a STUB, never a 12-month FY (Defect F)
+    assert stub_rows[0]["period_type"] == "STUB"
     assert stub_rows[0]["fiscal_year"] == "FY2014"
     # PHASE 6: the non-12-month duration survives at ROW level — a stub row
     # is never silently comparable to a normal fiscal year

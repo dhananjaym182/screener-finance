@@ -44,6 +44,10 @@ _PERIOD_RE = re.compile(
 _STUB_PERIOD_RE = re.compile(
     r"^([A-Za-z]{3})\s+(\d{4})\s+(\d{1,2})m$", re.I)
 
+# Trailing "NNm" duration suffix on an otherwise parseable header
+# ("Mar 2023 15m" -> months=15). Used to recover stub info from headers.
+_STUB_NOTE_RE = re.compile(r"\s+(\d{1,2})m$", re.I)
+
 
 def parse_period(text: str) -> dict[str, Any] | None:
     """'Mar 2015' -> ISO period_end + fiscal_year.
@@ -51,6 +55,9 @@ def parse_period(text: str) -> dict[str, Any] | None:
     India's fiscal year runs Apr-Mar, so Mar 2015 == FY2015 ends
     2015-03-31; any other end month rolls into the *next* calendar
     year's fiscal year (Jun 2023 -> FY2024, ends 2024-06-30).
+    Exception: Jan/Feb end months sit INSIDE FY<year> (Apr<year-1> -
+    Mar<year>), so they map to the CURRENT calendar year's FY — a
+    transition stub ending Jan 2026 belongs to FY2026, never FY2027.
     """
     s = (text or "").strip()
     if s.upper().rstrip("+") == "TTM":
@@ -66,7 +73,9 @@ def parse_period(text: str) -> dict[str, Any] | None:
         month = _MONTHS[mon]
         import calendar
         last_day = calendar.monthrange(yr, month)[1]
-        fiscal = yr if month == 3 else yr + 1
+        # Jan/Feb end months fall inside the fiscal year that ends in Mar
+        # of the SAME calendar year (see docstring).
+        fiscal = yr if month <= 3 else yr + 1
         return {
             "period_end": f"{yr:04d}-{month:02d}-{last_day:02d}",
             "fiscal_year": f"FY{fiscal}",
@@ -87,13 +96,70 @@ def parse_period(text: str) -> dict[str, Any] | None:
     import calendar
     last_day = calendar.monthrange(yr, month)[1]
 
-    fiscal = yr if month == 3 else yr + 1
+    # Consistent fiscal-year rule for ALL non-March ends: Apr-Dec roll into
+    # the NEXT fiscal year (Jun 2023 -> FY2024); Jan-Mar belong to the
+    # fiscal year ending in Mar of the same calendar year (Jan 2026 ->
+    # FY2026, Dec 2014 -> FY2015). The old blanket yr+1 mislabelled
+    # transition stubs ("Jan 2026" -> FY2027, a year after FY2026).
+    fiscal = yr if month <= 3 else yr + 1
     return {
         "period_end": f"{yr:04d}-{month:02d}-{last_day:02d}",
         "fiscal_year": f"FY{fiscal}",
         "period_type": "TTM" if tail.startswith("TTM") else None,
         "stub": False,
     }
+
+
+def resolve_stub_periods(
+    headers: list[str],
+) -> dict[tuple[int, int], dict[str, Any]]:
+    """Resolve stub-ness per (year, month) across a whole header list.
+
+    The site only prints the "NNm" duration suffix on the P&L header of a
+    stub period; the SAME period appears in balance_sheet / cash_flow /
+    ratios with a plain "Mar 2023" header. Stub-ness is a property of the
+    PERIOD, not of one section, so it must be resolved symbol-wide and
+    applied to every ANNUAL section (quarterly_results / shareholding
+    columns are quarters and snapshots by nature and are never flagged).
+
+    Resolution per (year, month):
+      - any header with an explicit "NNm" suffix -> stub, months = N;
+      - else a Jan/Feb end month (a transition period inside the fiscal
+        year ending that Mar) is conservatively flagged stub with an
+        UNKNOWN duration (stub_months=None, period_type "STUB");
+      - else (Mar/Jun/Sep/Dec ends, no suffix) -> normal period. Jun/Sep
+        fiscal-year-end annual columns (KENNAMET, SIEMENS) are genuine
+        12-month periods and must stay unflagged.
+
+    Returns {(year, month): {"stub": bool, "months": int | None}}.
+    """
+    out: dict[tuple[int, int], dict[str, Any]] = {}
+    for h in (headers or []):
+        s = (h or "").strip()
+        if s.upper().rstrip("+") == "TTM":
+            continue
+        base = _STUB_NOTE_RE.sub("", s)
+        m = _PERIOD_RE.match(base)
+        if not m:
+            continue
+        mon = m.group(1).lower()
+        if mon not in _MONTHS:
+            continue
+        yr = int(m.group(2))
+        if yr < 100:
+            yr += 2000
+        month = _MONTHS[mon]
+        key = (yr, month)
+        note = _STUB_NOTE_RE.search(s)
+        if note:
+            months = int(note.group(1))
+            if not out.get(key, {}).get("stub") or out[key].get("months") is None:
+                out[key] = {"stub": True, "months": months}
+        elif key not in out:
+            # plain header: only Jan/Feb ends are transition periods by
+            # month alone; Mar/Jun/Sep/Dec ends stay unflagged
+            out[key] = {"stub": month in (1, 2), "months": None}
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -146,8 +212,16 @@ ITEM_MAP = {
     "equity capital": "equity_capital",
     "reserves": "reserves",
     "borrowings": "borrowings",
+    # NBFC / lender templates spell the row "Borrowing" (singular)
+    "borrowing": "borrowings",
+    # NBFC / deposit-taking templates: customer deposits are a form of
+    # borrowing (kept as its own item; included in liabilities_ex_equity)
+    "deposits": "deposits",
     "other liabilities": "other_liabilities",
-    "total liabilities": "total_liabilities",
+    # Screener's "Total Liabilities" row is the balance-sheet GRAND TOTAL
+    # (== Total Assets: equity + every liability). Named after the provider
+    # label so nobody mistakes it for a liabilities-only figure.
+    "total liabilities": "total_equity_and_liabilities",
     "fixed assets": "fixed_assets",
     "cwip": "cwip",
     "capital work in progress": "cwip",
@@ -267,13 +341,20 @@ def canonical(
 
     Derived rows (marked `derived: True` with `source_items`, never
     overwriting a scraped row):
-      liabilities_ex_equity = borrowings + other_liabilities, per period.
-      Screener's "Total Liabilities" is the grand total (equals Total
-      Assets); Altman Z's X4 needs the ex-equity figure.
+      liabilities_ex_equity = the sum of the liability line items the
+      template provides (borrowings + other_liabilities, plus deposits
+      for NBFC/deposit-taking sheets). Screener's "Total Liabilities" is
+      the grand total (equals Total Assets); Altman Z's X4 needs the
+      ex-equity figure.
 
-    Every statement row carries `stub` / `stub_months`: audited
-    extended-period columns ("Mar 2015 15m" = 15 months of figures) stay
-    flagged so consumers never treat them as 12-month fiscal years.
+    Every statement row carries `stub` / `stub_months`. Stub-ness is a
+    property of the (symbol, view, period_end) PERIOD and is resolved
+    symbol-wide from the raw headers (the "NNm" suffix appears on the
+    P&L header alone), then applied to EVERY section, so a 15-month
+    period is flagged in balance_sheet / cash_flow / ratios too.
+    Non-March, non-December period ends (transition periods between
+    fiscal-year conventions) are conservatively flagged stub with an
+    unknown duration and period_type "STUB".
     """
     import time as _time
 
@@ -298,6 +379,37 @@ def canonical(
         indicators[key] = {"value": value, "unit": unit}
 
     # ---- statements (tidy time series) ----
+    # Stub-ness is a property of the PERIOD, not of one section: the site
+    # prints the "NNm" duration suffix only on the P&L header. Resolve it
+    # once across ALL sections and apply it uniformly below.
+    all_headers = [
+        h
+        for section in (record.get("sections") or {}).values()
+        for h in (section.get("headers") or [])
+    ]
+    stub_by_ym = resolve_stub_periods(all_headers)
+
+    def _period_stub(section_key: str,
+                     period: dict[str, Any]) -> tuple[bool, int | None]:
+        """Record-wide stub flags for one parsed period.
+
+        quarterly_results / shareholding columns are quarters and
+        ownership snapshots by nature — never stubs, even when their
+        period_end collides with an annual stub period (Jun-FY companies:
+        annual 'Jun 2022' + quarterly 'Jun 2022'). TTM columns have no
+        duration of their own and never inherit a period's stub flag.
+        """
+        if (section_key in ("quarterly_results", "shareholding")
+                or period.get("period_type")):  # TTM column
+            return False, None
+        if not period.get("period_end"):
+            return bool(period.get("stub")), period.get("stub_months")
+        res = stub_by_ym.get((int(period["period_end"][:4]),
+                              int(period["period_end"][5:7])))
+        if res is None:
+            return bool(period.get("stub")), period.get("stub_months")
+        return res["stub"], res["months"]
+
     # Record-wide latest quarter-end: fallback anchor for TTM columns in
     # sections that carry *only* a TTM header (rare; 3 of 4,541 companies).
     all_q_ends = [
@@ -334,11 +446,23 @@ def canonical(
             for i, period in enumerate(periods):
                 if period is None or i >= len(values):
                     continue
+                # Unified period_type rule:
+                #   TTM column            -> "TTM"
+                #   stub with known months -> months == 12 ? "FY" : "STUB"
+                #     (a "12m" suffix is just a labelled full year)
+                #   stub without months    -> "STUB" (unknown duration)
+                #   Mar / Dec year-end     -> "FY"
+                #   anything else          -> "Q" (genuine quarter)
+                stub, stub_months = _period_stub(key, period)
                 if period["period_type"]:
                     ptype = "TTM"
                     period_end = period["period_end"] or ttm_end
                     fiscal_year = period["fiscal_year"] or ttm_fy
-                elif period["period_end"][5:7] == "03":
+                elif stub:
+                    ptype = "FY" if stub_months == 12 else "STUB"
+                    period_end = period["period_end"]
+                    fiscal_year = period["fiscal_year"]
+                elif period["period_end"][5:7] in ("03", "12"):
                     ptype = "FY"
                     period_end = period["period_end"]
                     fiscal_year = period["fiscal_year"]
@@ -357,24 +481,33 @@ def canonical(
                     "value": values[i],
                     # audited/extended-period columns ("Mar 2015 15m") keep
                     # their non-12-month duration semantics: never silently
-                    # comparable to a normal fiscal year.
-                    "stub": bool(period.get("stub")),
-                    "stub_months": period.get("stub_months"),
+                    # comparable to a normal fiscal year. Flagging is
+                    # record-wide, so every section of the period agrees.
+                    "stub": stub,
+                    "stub_months": stub_months,
                 })
 
         # Derived: liabilities_ex_equity, per period (see docstring).
+        # Composition adapts to the template: NBFC/lender sheets spell the
+        # row "Borrowing" (-> borrowings) and deposit-takers add "Deposits"
+        # (-> deposits); every provided liability line is summed.
         if key == "balance_sheet":
+            liability_items = ("borrowings", "deposits", "other_liabilities")
             comps: dict[tuple, dict[str, Any]] = {}
             for r in rows_out:
-                if r["item"] in ("borrowings", "other_liabilities"):
+                if r["item"] in liability_items and not r.get("derived"):
                     k = (r["period_type"], r["period_end"], r["fiscal_year"])
-                    comps.setdefault(k, {})[r["item"]] = r["value"]
+                    entry = comps.setdefault(k, {})
+                    entry[r["item"]] = r["value"]
+                    entry["_stub"] = (r["stub"], r["stub_months"])
             for k in sorted(comps, key=lambda k: k[1] or ""):
                 pair = comps[k]
                 b = pair.get("borrowings")
+                d = pair.get("deposits")
                 o = pair.get("other_liabilities")
                 if b is None or o is None:
                     continue
+                stub, stub_months = pair["_stub"]
                 rows_out.append({
                     "symbol": record["symbol"],
                     "view": record.get("view"),
@@ -383,13 +516,15 @@ def canonical(
                     "period_end": k[1],
                     "fiscal_year": k[2],
                     "period_type": k[0],
-                    "value": b + o,
+                    "value": b + (d or 0.0) + o,
                     "derived": True,
-                    "source_items": ["borrowings", "other_liabilities"],
+                    "source_items": [i for i in liability_items
+                                     if pair.get(i) is not None],
                     # keep the full TIDY_COLUMNS shape so the tidy CSV
-                    # projection never KeyErrors on derived rows
-                    "stub": False,
-                    "stub_months": None,
+                    # projection never KeyErrors on derived rows; the
+                    # period's stub flags propagate to the derived row
+                    "stub": stub,
+                    "stub_months": stub_months,
                 })
         statements.extend(rows_out)
 

@@ -12,6 +12,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from screener_finance.normalize import resolve_stub_periods
 from screener_finance.schedules_normalize import (  # noqa: E402
     SCHEDULE_AGGREGATE_ITEMS,
     SCHEDULE_COLUMNS,
@@ -146,6 +147,66 @@ def test_endpoint_metadata_rows_are_skipped():
                           "Short term Borrowings": {"Mar 2026": "1,000"}})
     assert len(rows) == 1
     assert rows[0]["value"] == 1000.0
+
+
+def test_stub_period_propagates_from_company_headers():
+    """The schedules endpoint strips the 'NNm' suffix (ACC: P&L header
+    'Mar 2023 15m' arrives as plain 'Mar 2023'). Passing the record-wide
+    stub resolution must flag the same periods as the statements panel
+    (Defect B: 2,169,413 rows all stub=False)."""
+    payload = {"Short term Borrowings": {"Mar 2022": "500",
+                                         "Mar 2023": "600",
+                                         "Mar 2024": "700"}}
+    headers = ["Mar 2022", "Mar 2023 15m", "Mar 2024"]
+    stub_by_ym = resolve_stub_periods(headers)
+
+    # without stub map: legacy behaviour, nothing flagged
+    plain = schedule_rows("ACC", "consolidated", "balance_sheet",
+                          "borrowings", payload)
+    assert all(r["stub"] is False and r["period_type"] == "FY"
+               for r in plain)
+
+    # with stub map: the 15-month period is flagged everywhere
+    rows = schedule_rows("ACC", "consolidated", "balance_sheet",
+                         "borrowings", payload, stub_by_ym=stub_by_ym)
+    by_end = {r["period_end"]: r for r in rows}
+    assert by_end["2023-03-31"]["stub"] is True
+    assert by_end["2023-03-31"]["stub_months"] == 15
+    assert by_end["2023-03-31"]["period_type"] == "STUB"
+    assert by_end["2022-03-31"]["stub"] is False
+    assert by_end["2022-03-31"]["period_type"] == "FY"
+    assert by_end["2024-03-31"]["stub"] is False
+
+
+def test_ingest_archive_resolves_stub_via_headers():
+    with tempfile.TemporaryDirectory() as tmp:
+        vdir = os.path.join(tmp, "ACC", "consolidated")
+        os.makedirs(vdir)
+        with open(os.path.join(vdir, "balance-sheet__borrowings.json"),
+                  "w", encoding="utf-8") as fp:
+            json.dump({"Short term Borrowings": {"Mar 2023": "600"}}, fp)
+        with open(os.path.join(vdir, "_backfill_done.json"),
+                  "w", encoding="utf-8") as fp:
+            json.dump({"symbol": "ACC"}, fp)
+        rows = ingest_archive(tmp, headers_by_view={
+            "consolidated": ["Mar 2022", "Mar 2023 15m", "Mar 2024"]})
+        assert len(rows) == 1
+        assert rows[0]["stub"] is True and rows[0]["stub_months"] == 15
+        assert rows[0]["period_type"] == "STUB"
+
+
+def test_schedule_jan_feb_period_is_stub_not_quarter():
+    """ONEINDIG transition period: schedule payload header 'Jan 2026'
+    without the stub map parses to period_type FY (legacy); with the
+    record-wide map it must be stub/STUB and fiscal_year FY2026."""
+    payload = {"Direct taxes": {"Jan 2026": "42"}}
+    rows = schedule_rows("ONEINDIG", "consolidated", "cash_flow",
+                         "cash_from_operating_activity", payload,
+                         stub_by_ym=resolve_stub_periods(
+                             ["Mar 2025", "Jan 2026 10m", "Mar 2026"]))
+    assert rows[0]["stub"] is True
+    assert rows[0]["period_type"] == "STUB"
+    assert rows[0]["fiscal_year"] == "FY2026"
 
 
 def test_ingest_archive_requires_done_marker():

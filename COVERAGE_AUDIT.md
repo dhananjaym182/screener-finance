@@ -33,6 +33,35 @@ Checked via the offline regression suite (`tests/test_offline.py`):
   (`borrowings + other_liabilities`), flagged `derived: True` with
   `source_items`, never overwriting scraped rows
   (`test_canonical_derived_liabilities_ex_equity`).
+- **FIXED — NBFC templates had no ex-equity figure (2026-10-01 defect
+  sweep).** 334 lender/NBFC sheets spell the row `Borrowing` (singular)
+  and 24 deposit-takers add `Deposits`; both fell through `ITEM_MAP`, so
+  the derived row never fired for them (219 symbols had zero coverage).
+  `Borrowing` -> `borrowings`, `Deposits` -> `deposits`; the derived
+  composition now sums every provided liability line (borrowings +
+  deposits + other_liabilities)
+  (`test_canonical_nbfc_borrowing_and_deposits_templates`).
+- **FIXED — `total_liabilities` was a naming trap.** The item held the
+  balance-sheet GRAND TOTAL (== `total_assets`); mapping it onto a
+  liabilities key silently publishes the sheet total as debt. Renamed to
+  `total_equity_and_liabilities` (matching the provider label's meaning);
+  `liabilities_ex_equity` remains the liabilities-only figure.
+- **FIXED — stub flags were applied to profit_loss only (2026-10-01
+  defect sweep).** The site prints the `NNm` duration suffix only on the
+  P&L header (ACC: `Mar 2023 15m` in P&L vs plain `Mar 2023` in
+  balance_sheet/cash_flow/ratios), so 103 stub periods carried mixed
+  flags and the schedules panel (2.17M rows) had none at all. Stub-ness
+  is now resolved per (symbol, view, period_end) via
+  `resolve_stub_periods()` across ALL headers and applied to every annual
+  section and to schedule detail rows; quarterly_results/shareholding
+  columns are never flagged (quarters/snapshots can share a period_end
+  with an annual stub). Stub rows get `period_type` `STUB` (never `Q`),
+  and Jan/Feb transition ends map to the fiscal year ending that March
+  (`Jan 2026` -> FY2026, previously mislabelled FY2027).
+  (`test_canonical_stub_flags_apply_to_every_section`,
+  `test_canonical_transition_stub_period_type_and_fy`,
+  `test_stub_period_propagates_from_company_headers`,
+  `test_schedule_jan_feb_period_is_stub_not_quarter`)
 
 ## Task 2 — Screener's *detailed* balance-sheet view
 
@@ -53,7 +82,7 @@ recovered from the summary view.
 | Field | Status | Source |
 |---|---|---|
 | `total_assets` | present | balance_sheet `Total Assets` (Cr) |
-| `total_liabilities_ex_equity` | **now derived** | `liabilities_ex_equity` = borrowings + other_liabilities |
+| `total_liabilities_ex_equity` | **now derived** | `liabilities_ex_equity` = borrowings + deposits + other_liabilities (deposits on NBFC/deposit-taker sheets) |
 | `ebit` | present (proxy) | profit_loss `operating_profit` (`PBT excl other income`); exact EBIT = that + `finance_cost` |
 | `sales` | present | profit_loss `Sales` (Cr) |
 | `market_value_of_equity` | present | indicator `market_cap` (INR Cr) |

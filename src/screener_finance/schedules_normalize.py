@@ -27,7 +27,7 @@ import json
 import os
 from typing import Any, Iterable
 
-from .normalize import parse_period
+from .normalize import parse_period, resolve_stub_periods
 from .parse import num
 
 # --------------------------------------------------------------------------
@@ -208,12 +208,19 @@ def schedule_rows(
     section: str,
     parent_item: str,
     payload: dict[str, Any],
+    stub_by_ym: dict[tuple[int, int], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """One schedules payload -> tidy canonical rows.
 
     ``payload`` is the raw endpoint JSON: {verbatim detail label:
     {"Mar 2015": "1,23,456", ...}}. Metadata keys produced by the endpoint
     (setAttributes / isExpandable entries) are skipped here.
+
+    ``stub_by_ym``: optional record-wide stub resolution (see
+    ``normalize.resolve_stub_periods``). The schedules endpoint strips the
+    "NNm" duration suffix from its column headers, so stub periods arrive
+    here as plain "Mar 2023"; passing the symbol's resolved stub map flags
+    them consistently with the statements panel.
     """
     key = (section, parent_item)
     item_map = SCHEDULE_ITEM_MAP.get(key, {})
@@ -226,7 +233,19 @@ def schedule_rows(
             period = parse_period(header)
             if period is None:
                 continue
-            ptype = "FY" if not period["period_type"] else "TTM"
+            stub = bool(period.get("stub"))
+            months = period.get("stub_months")
+            if stub_by_ym and period["period_end"]:
+                res = stub_by_ym.get((int(period["period_end"][:4]),
+                                      int(period["period_end"][5:7])))
+                if res is not None:
+                    stub, months = res["stub"], res["months"]
+            if period["period_type"]:
+                ptype = "TTM"
+            elif stub:
+                ptype = "FY" if months == 12 else "STUB"
+            else:
+                ptype = "FY"
             rows.append({
                 "symbol": symbol,
                 "view": view,
@@ -241,8 +260,8 @@ def schedule_rows(
                 "value": num(raw_value),
                 "metric": item not in SCHEDULE_NON_METRIC_ITEMS,
                 "aggregate": SCHEDULE_AGGREGATE_ITEMS.get(item),
-                "stub": bool(period.get("stub")),
-                "stub_months": period.get("stub_months"),
+                "stub": stub,
+                "stub_months": months,
             })
     return rows
 
@@ -251,11 +270,16 @@ def ingest_archive(
     archive_dir: str,
     symbols: Iterable[str] | None = None,
     require_done_marker: bool = True,
+    headers_by_view: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Walk a raw-first schedules archive and return all canonical rows.
 
     Only symbols with a ``_backfill_done.json`` marker are ingested by
     default — partial archives must never leak into the canonical dataset.
+
+    ``headers_by_view``: optional {view: [all company-page headers]} from
+    the raw record, used to resolve stub periods symbol-wide (the schedule
+    payloads themselves lack the "NNm" duration suffix).
     """
     marker = "_backfill_done.json"
     root = os.fspath(archive_dir)
@@ -271,6 +295,9 @@ def ingest_archive(
             if require_done_marker and not os.path.exists(
                     os.path.join(vdir, marker)):
                 continue
+            stub_by_ym = None
+            if headers_by_view and headers_by_view.get(view):
+                stub_by_ym = resolve_stub_periods(headers_by_view[view])
             for fn in sorted(os.listdir(vdir)):
                 if (not fn.endswith(".json") or fn.startswith("_")
                         or fn.endswith(".meta.json")):
@@ -284,6 +311,6 @@ def ingest_archive(
                     continue  # e.g. quarterly sections; annual-only policy
                 with open(os.path.join(vdir, fn), encoding="utf-8") as fp:
                     payload = json.load(fp)
-                rows.extend(
-                    schedule_rows(sym, view, section, parent_label, payload))
+                rows.extend(schedule_rows(sym, view, section, parent_label,
+                                          payload, stub_by_ym=stub_by_ym))
     return rows
